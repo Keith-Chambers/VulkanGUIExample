@@ -20,6 +20,23 @@ void createGenericFrameBuffers(const VkRenderPass& renderPass,
                                std::vector<VkFramebuffer>& outFrameBuffers,
                                VkExtent2D swapChainExtent);
 
+void createBufferOnMemory(  VkDevice device,
+                            VkDeviceSize size,
+                            uint32_t memoryOffset,
+                            VkBufferUsageFlags usage,
+                            VkDeviceMemory& bufferMemory,
+                            VkBuffer& outBuffer );
+
+void flushMemoryToDeviceLocal(const VkDevice device,
+                              const VkPhysicalDevice physicalDevice,
+                              const VkQueue graphicsQueue,
+                              const VkCommandPool commandPool,
+                              VkBuffer srcBuffer,
+                              VkBuffer dstBuffer,
+                              VkDeviceMemory& dstBufferMemory,
+                              VkDeviceSize bufferSize,
+                              VkBufferUsageFlags usage );
+
 void createBuffer(  VkDevice device,
                     VkPhysicalDevice physicalDevice,
                     VkDeviceSize size,
@@ -45,6 +62,11 @@ void createImage(   VkDevice device,
                     VkMemoryPropertyFlags properties,
                     VkImage& image,
                     VkDeviceMemory& imageMemory);
+
+void allocateMemory( VkDevice device,
+                     VkDeviceSize size,
+                     uint32_t memoryTypeIndex,
+                     VkDeviceMemory& bufferMemory);
 
 uint32_t findMemoryType(    VkPhysicalDevice physicalDevice,
                             uint32_t typeFilter,

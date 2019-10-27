@@ -12,6 +12,17 @@ static uint16_t currentWindowWidth = vconfig::INITIAL_WINDOW_WIDTH;
 const uint8_t VERTICES_PER_SQUARE = 4;
 const uint8_t INDICES_PER_SQUARE = 6;
 
+
+//struct UIComponent {
+
+//    uint8_t * vertexStart;
+//    uint8_t * vertexEnd;
+//    uint8_t * indexStart;
+//    uint8_t * indexEnd;
+
+
+//};
+
 void recreateSwapChain(VulkanApplication& app)
 {
     int width = 0, height = 0;
@@ -546,6 +557,12 @@ VulkanApplication setupApplication()
         throw std::runtime_error("Failed to create the first pipeline");
     }
 
+    // TODO: You may want to add some assertions around memoryTypeIndex as an invalid value doesn't trigger the validation layers or crash the application. Simply UB.
+    allocateMemory(app.device, vconfig::PIPELINE_MEMORY_SIZE, 0, texturesPipeline.pipelineMemory);
+
+    // Note: I'm mapping all allocated device memory to mappedVertexData. However it will be shared with mappedIndexData too.
+    vkMapMemory(app.device, texturesPipeline.pipelineMemory, 0, vconfig::PIPELINE_MEMORY_SIZE, 0, reinterpret_cast<void**>(&texturesPipeline.mappedVertexData));
+
     assert(texturesPipeline.setupCache.descriptorSetLayoutBindings.size() == 1);
 
 }
@@ -587,6 +604,12 @@ VulkanApplication setupApplication()
         throw std::runtime_error("Failed to create the second pipeline");
     }
 
+    // TODO: You may want to add some assertions around memoryTypeIndex as an invalid value doesn't trigger the validation layers or crash the application. Simply UB.
+    allocateMemory(app.device, vconfig::PIPELINE_MEMORY_SIZE, 0, primativeShapesPipeline.pipelineMemory);
+
+    // Note: I'm mapping all allocated device memory to mappedVertexData. However it will be shared with mappedIndexData too.
+    vkMapMemory(app.device, primativeShapesPipeline.pipelineMemory, 0, vconfig::PIPELINE_MEMORY_SIZE, 0, reinterpret_cast<void**>(&primativeShapesPipeline.mappedVertexData));
+
     // Create Command Pool BEGIN
 
     QueueFamilyIndices queueFamilyIndices = findQueueFamilies(app.physicalDevice, app.surface);
@@ -623,10 +646,10 @@ VulkanApplication setupApplication()
     fontBitmap.face = face;
 
     std::string unique_chars = "abcdefghijklmnopqrstuvwxyz \"ABCDEFGHIJKLMNOPQRSTUVWXYZ.<>!?";
-    uint16_t cell_size = 40; // TODO: No assert for when this gets too small
-    uint16_t cells_per_line = 10;
+    uint16_t cellSize = 40; // TODO: No assert for when this gets too small
+    uint16_t cellsPerLine = 10;
 
-    instanciateFontBitmap(fontBitmap, face, unique_chars.c_str(), cells_per_line, cell_size );
+    instanciateFontBitmap(fontBitmap, face, unique_chars.c_str(), cellsPerLine, cellSize );
 
     FT_Done_Face(face);
     FT_Done_FreeType(ft);
@@ -782,8 +805,6 @@ VulkanApplication setupApplication()
     poolInfo.poolSizeCount = static_cast<uint32_t>(descriptorPoolSizes.size());
     poolInfo.pPoolSizes = descriptorPoolSizes.data();
     poolInfo.maxSets = static_cast<uint32_t>(app.swapChainImages.size());
-
-//    VkDescriptorPool descriptorPool; // TODO: This is a hack, should be stored somewhere proper
 
     if (vkCreateDescriptorPool(app.device, &poolInfo, nullptr, &app.descriptorPool) != VK_SUCCESS) {
         throw std::runtime_error("failed to create descriptor pool!");

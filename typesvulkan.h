@@ -137,6 +137,18 @@ struct PipelineSetupData {
     std::vector<VkVertexInputAttributeDescription> vertexAttributeDescriptions;
 };
 
+enum class UITYPE { BUTTON, TEXT };
+
+struct UITypeMeshBinding
+{
+
+    UITYPE type;
+    uint32_t indexStartIndex;
+    uint32_t vertexStartIndex;
+    uint16_t vertexLength;
+    uint16_t indexLength;
+};
+
 struct VulkanApplicationPipeline
 {
     VkRenderPass renderPass = nullptr;
@@ -145,9 +157,9 @@ struct VulkanApplicationPipeline
     VkPipeline graphicsPipeline = nullptr;
 
     VkBuffer vertexBuffer = nullptr;
-    VkDeviceMemory vertexBufferMemory = nullptr;
+    VkDeviceMemory vertexBufferMemory = nullptr;        // Remove
     VkBuffer indexBuffer = nullptr;
-    VkDeviceMemory indexBufferMemory = nullptr;
+    VkDeviceMemory indexBufferMemory = nullptr;         // Remove
 
     VkDescriptorPool descriptorPool = nullptr;
     std::vector<VkDescriptorSet> descriptorSets;
@@ -157,10 +169,18 @@ struct VulkanApplicationPipeline
     VkImageView textureImageView = nullptr;
     VkSampler textureSampler = nullptr;
 
+    // Refactor Start
+
+    uint8_t * mappedVertexData;
+    uint8_t * mappedIndexData;
+    VkDeviceMemory pipelineMemory;
+    UITypeMeshBinding uiComponentsMap[100];
+
+    // Refactor End
+
     std::vector<VkFramebuffer> swapChainFramebuffers;
     std::vector<uint16_t> drawIndices;
 
-    // glm::vec2
     glm::vec2 * vertexDataStart;
     uint32_t vertexDataStride;
     uint32_t numVertices;

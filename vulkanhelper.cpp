@@ -42,7 +42,47 @@ uint32_t findMemoryType(    VkPhysicalDevice physicalDevice,
     VkPhysicalDeviceMemoryProperties memProperties;
     vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
 
+//    printf("Memory types -> %d\n", memProperties.memoryTypeCount);
+
     for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
+
+
+//        printf("Memory type #%d\n-----------\n", i + 1);
+
+//        if(memProperties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
+//            printf("VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT \n");
+//        }
+
+//        if(memProperties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
+//            printf("VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT \n");
+//        }
+
+//        if(memProperties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) {
+//            printf("VK_MEMORY_PROPERTY_HOST_COHERENT_BIT \n");
+//        }
+
+//        if(memProperties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_CACHED_BIT) {
+//            printf("VK_MEMORY_PROPERTY_HOST_CACHED_BIT \n");
+//        }
+
+//        if(memProperties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT) {
+//            printf("VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT \n");
+//        }
+
+//        if(memProperties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_PROTECTED_BIT) {
+//            printf("VK_MEMORY_PROPERTY_PROTECTED_BIT \n");
+//        }
+
+//        if(memProperties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_COHERENT_BIT_AMD) {
+//            printf("VK_MEMORY_PROPERTY_DEVICE_COHERENT_BIT_AMD \n");
+//        }
+
+//        if(memProperties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_UNCACHED_BIT_AMD) {
+//            printf("VK_MEMORY_PROPERTY_DEVICE_UNCACHED_BIT_AMD \n");
+//        }
+
+//        printf("-----------\n\n");
+
         if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
             return i;
         }
@@ -89,6 +129,69 @@ void copyBuffer(    VkDevice device,
     vkQueueWaitIdle(graphicsQueue);
 
     vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
+}
+
+void createBufferOnMemory(  VkDevice device,
+                            VkDeviceSize size,
+                            uint32_t memoryOffset,
+                            VkBufferUsageFlags usage,
+                            VkDeviceMemory& bufferMemory,
+                            VkBuffer& outBuffer )
+{
+
+    VkBufferCreateInfo bufferInfo = {};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = size;
+    bufferInfo.usage = usage;
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    if(vkCreateBuffer(device, &bufferInfo, nullptr, &outBuffer) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create buffer!");
+    }
+
+    vkBindBufferMemory(device, outBuffer, bufferMemory, memoryOffset);
+}
+
+
+void flushMemoryToDeviceLocal(const VkDevice device,
+                              const VkPhysicalDevice physicalDevice,
+                              const VkQueue graphicsQueue,
+                              const VkCommandPool commandPool,
+                              VkBuffer srcBuffer,
+                              VkBuffer dstBuffer,
+                              VkDeviceMemory& dstBufferMemory,
+                              VkDeviceSize bufferSize,
+                              VkBufferUsageFlags usage )
+{
+    createBuffer(   device,
+                    physicalDevice,
+                    bufferSize,
+                    usage,
+                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                    dstBuffer,
+                    dstBufferMemory);
+
+    copyBuffer( device,
+                commandPool,
+                graphicsQueue,
+                srcBuffer,
+                dstBuffer,
+                bufferSize);
+}
+
+void allocateMemory( VkDevice device,
+                     VkDeviceSize size,
+                     uint32_t memoryTypeIndex,
+                     VkDeviceMemory& bufferMemory )
+{
+    VkMemoryAllocateInfo allocInfo = {};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = size;
+    allocInfo.memoryTypeIndex = memoryTypeIndex;
+
+    if(vkAllocateMemory(device, &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS) {
+        throw std::runtime_error("failed to allocate buffer memory!");
+    }
 }
 
 void createBuffer(  VkDevice device,
@@ -153,8 +256,6 @@ void createGenericFrameBuffers(const VkRenderPass& renderPass,
         }
     }
 }
-
-
 
 void createImage(   VkDevice device,
                     VkPhysicalDevice physicalDevice,
