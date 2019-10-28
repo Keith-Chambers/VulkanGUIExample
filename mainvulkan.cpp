@@ -349,7 +349,7 @@ void mainLoop(VulkanApplication& app)
             sinceLastFPSPrint = 0ms;
         }
 
-        loopLogic(app);
+        loopLogic(app, framesPerSec);
 
         drawFrame(app);
         framesPerSec++;
@@ -490,7 +490,7 @@ static void framebufferResizeCallback(GLFWwindow* window, int width, int height)
     framebufferResized = true;
 }
 
-void loopLogic(VulkanApplication& app)
+void loopLogic(VulkanApplication& app, uint32_t delta)
 {
     VulkanApplicationPipeline& texturesPipeline = app.pipelines[PipelineType::Texture];
     VulkanApplicationPipeline& primativeShapesPipeline = app.pipelines[PipelineType::PrimativeShapes];
@@ -532,11 +532,14 @@ void loopLogic(VulkanApplication& app)
     uint16_t * primativeShapesIndicesPointer = reinterpret_cast<uint16_t*>(primativeShapesPipeline.pipelineMappedMemory + primativeShapesPipeline.usageMap[static_cast<uint16_t>(MemoryUsageType::INDICES_BUFFER)].offset);
 
     // TODO: Remove unnessecary copy from std::vectors
+
+    float xOffset = static_cast<float>(delta) / 25.0f;
+
     std::vector<BasicVertex> simpleShapesVertices = {
-        {{-0.5f, -1.0f}, {1.0f, 0.0f, 0.0f}},
-        {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-        {{-1.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-        {{-1.0f, -1.0f}, {1.0f, 0.0f, 0.0f}}
+        {{-0.5f + xOffset, -1.0f}, {1.0f, 0.0f, 0.0f}},
+        {{-0.5f + xOffset, -0.5f}, {1.0f, 0.0f, 0.0f}},
+        {{-1.0f + xOffset, -0.5f}, {1.0f, 0.0f, 0.0f}},
+        {{-1.0f + xOffset, -1.0f}, {1.0f, 0.0f, 0.0f}}
     };
 
     memcpy(basicVertexPointer, simpleShapesVertices.data(), simpleShapesVertices.size() * sizeof(BasicVertex));
@@ -553,14 +556,12 @@ void loopLogic(VulkanApplication& app)
 
     VkClearValue clearColor = { /* .color = */  {  /* .float32 = */  { 0.0f, 0.0f, 0.0f, 1.0f } } };
 
-    // wait.
     vkDeviceWaitIdle(app.device);
 
     for (size_t i = 0; i < app.commandBuffers.size(); i++)
     {
         VkCommandBufferBeginInfo beginInfo = {};
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-//        beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
         if (vkBeginCommandBuffer(app.commandBuffers[i], &beginInfo) != VK_SUCCESS) {
             throw std::runtime_error("failed to begin recording command buffer!");
@@ -833,39 +834,6 @@ VulkanApplication setupApplication()
 
     // Create Texture Sampler END
 
-//    texturesPipeline.vertexStride = sizeof(Vertex);
-
-//    std::string otherText = "How are you doing today? I hope you are doing well!";
-
-//    uint16_t requiredVertices = static_cast<uint16_t>(otherText.size()) * VERTICES_PER_SQUARE;
-//    uint16_t requiredIndices = static_cast<uint16_t>(otherText.size()) * INDICES_PER_SQUARE;
-
-//    // TODO: Make +=
-//    texturesPipeline.numVertices = requiredVertices;
-
-//    Vertex * vertexPointer = reinterpret_cast<Vertex*>(texturesPipeline.pipelineMappedMemory + texturesPipeline.usageMap[static_cast<uint16_t>(MemoryUsageType::VERTEX_BUFFER)].offset);
-//    uint16_t * indicesPointer = reinterpret_cast<uint16_t*>(texturesPipeline.pipelineMappedMemory + texturesPipeline.usageMap[static_cast<uint16_t>(MemoryUsageType::INDICES_BUFFER)].offset);
-
-//    generateTextMeshes(indicesPointer, &vertexPointer->pos, sizeof(Vertex), 0, fontBitmap, &vertexPointer->texCoord, texturesPipeline.vertexStride, otherText, 150, 25);
-
-//    texturesPipeline.numIndices += requiredIndices;
-
-//    std::string moreText = "Im doing pretty good indeed";
-
-//    generateTextMeshes( indicesPointer + requiredIndices,
-//                        &(vertexPointer + requiredVertices)->pos,
-//                        sizeof(Vertex),
-//                        requiredVertices,
-//                        fontBitmap,
-//                        &(vertexPointer + requiredVertices)->texCoord,
-//                        texturesPipeline.vertexStride,
-//                        moreText, 150, 250);
-
-
-//    texturesPipeline.numVertices += moreText.size() * VERTICES_PER_SQUARE;
-//    texturesPipeline.numIndices += moreText.size() * INDICES_PER_SQUARE;
-
-    // This flushes memory to device local
     createBufferOnMemory(   app.device,
                             texturesPipeline.usageMap[static_cast<uint16_t>(MemoryUsageType::VERTEX_BUFFER)].size,
                             texturesPipeline.usageMap[static_cast<uint16_t>(MemoryUsageType::VERTEX_BUFFER)].offset,
@@ -879,31 +847,6 @@ VulkanApplication setupApplication()
                             VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
                             texturesPipeline.pipelineMemory,
                             texturesPipeline.indexBuffer );
-
-{   // BEGIN generate mesh for `primativeShapes` pipeline
-
-//    Vertex * basicVertexPointer = reinterpret_cast<Vertex*>(primativeShapesPipeline.pipelineMappedMemory + primativeShapesPipeline.usageMap[static_cast<uint16_t>(MemoryUsageType::VERTEX_BUFFER)].offset);
-//    uint16_t * primativeShapesIndicesPointer = reinterpret_cast<uint16_t*>(primativeShapesPipeline.pipelineMappedMemory + primativeShapesPipeline.usageMap[static_cast<uint16_t>(MemoryUsageType::INDICES_BUFFER)].offset);
-
-//    // TODO: Remove unnessecary copy from std::vectors
-//    std::vector<BasicVertex> simpleShapesVertices = {
-//        {{-0.5f, -1.0f}, {1.0f, 0.0f, 0.0f}},
-//        {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-//        {{-1.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-//        {{-1.0f, -1.0f}, {1.0f, 0.0f, 0.0f}}
-//    };
-
-//    memcpy(basicVertexPointer, simpleShapesVertices.data(), simpleShapesVertices.size() * sizeof(BasicVertex));
-
-//    std::vector<uint16_t> drawIndices = {
-//        0, 1, 2, 2, 3, 0
-//    };
-
-//    memcpy(primativeShapesIndicesPointer, drawIndices.data(), drawIndices.size() * sizeof(uint16_t));
-
-//    primativeShapesPipeline.numVertices = static_cast<uint32_t>(simpleShapesVertices.size());
-//    primativeShapesPipeline.numIndices = static_cast<uint32_t>(drawIndices.size());
-//    primativeShapesPipeline.vertexStride = sizeof(BasicVertex);
 
     createBufferOnMemory(   app.device,
                             primativeShapesPipeline.usageMap[static_cast<uint16_t>(MemoryUsageType::VERTEX_BUFFER)].size,
@@ -919,10 +862,7 @@ VulkanApplication setupApplication()
                             primativeShapesPipeline.pipelineMemory,
                             primativeShapesPipeline.indexBuffer );
 
-}   // END generate mesh for `primativeShapes` pipeline
-
     // Create Description Pool Begin
-
     std::array<VkDescriptorPoolSize, 1> descriptorPoolSizes = {};
 
     descriptorPoolSizes[0].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -995,59 +935,6 @@ VulkanApplication setupApplication()
     if (vkAllocateCommandBuffers(app.device, &commandBufferAllocInfo, app.commandBuffers.data()) != VK_SUCCESS) {
         throw std::runtime_error("failed to allocate command buffers!");
     }
-
-//    VkClearValue clearColor = { /* .color = */  {  /* .float32 = */  { 0.0f, 0.0f, 0.0f, 1.0f } } };
-
-//    for (size_t i = 0; i < app.commandBuffers.size(); i++)
-//    {
-//        VkCommandBufferBeginInfo beginInfo = {};
-//        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-
-//        if (vkBeginCommandBuffer(app.commandBuffers[i], &beginInfo) != VK_SUCCESS) {
-//            throw std::runtime_error("failed to begin recording command buffer!");
-//        }
-
-//        for(size_t layerIndex = 0; layerIndex < PipelineType::SIZE; layerIndex++)
-//        {
-//            VulkanApplicationPipeline& pipeline = app.pipelines[ app.pipelineDrawOrder[layerIndex] ];
-
-//            VkRenderPassBeginInfo renderPassInfo = {};
-//            renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-//            renderPassInfo.renderPass = pipeline.renderPass;
-//            renderPassInfo.framebuffer = pipeline.swapChainFramebuffers[i];
-//            renderPassInfo.renderArea.offset = {0, 0};
-//            renderPassInfo.renderArea.extent = app.swapChainExtent;
-
-//            bool requiresInitialClear = (layerIndex == 0);
-
-//            renderPassInfo.clearValueCount = (requiresInitialClear) ? 1 : 0;
-//            renderPassInfo.pClearValues = (requiresInitialClear) ? &clearColor : nullptr;
-
-//            vkCmdBeginRenderPass(app.commandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-//                vkCmdBindPipeline(app.commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.graphicsPipeline);
-
-//                VkBuffer vertexBuffers[] = {pipeline.vertexBuffer};
-//                VkDeviceSize offsets[] = {0};
-//                vkCmdBindVertexBuffers(app.commandBuffers[i], 0, 1, vertexBuffers, offsets);
-
-//                vkCmdBindIndexBuffer(app.commandBuffers[i], pipeline.indexBuffer, 0, VK_INDEX_TYPE_UINT16);
-
-//                if(pipeline.pipelineLayout != nullptr && pipeline.descriptorSets.size() != 0) {
-//                    vkCmdBindDescriptorSets(app.commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipelineLayout, 0, 1, &pipeline.descriptorSets[i], 0, nullptr);
-//                }
-
-//                vkCmdDrawIndexed(app.commandBuffers[i], pipeline.numIndices, 1, 0, 0, 0);
-
-//            vkCmdEndRenderPass(app.commandBuffers[i]);
-//        }
-
-//        if (vkEndCommandBuffer(app.commandBuffers[i]) != VK_SUCCESS) {
-//            throw std::runtime_error("failed to record command buffer!");
-//        }
-//    }
-
-    // Create Command Buffers END
 
     // Create Sync Objects BEGIN
 
