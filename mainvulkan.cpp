@@ -248,6 +248,8 @@ int main()
 {
     VulkanApplication app = setupApplication();
 
+    // TODO: Move mesh generation + commandBuffer recording into mainLoop
+
     mainLoop(app);
     cleanup(app);
 
@@ -323,14 +325,14 @@ void mainLoop(VulkanApplication& app)
 
     uint32_t framesPerSec = 0;
 
-    constexpr uint16_t targetFPS = 50;
+    constexpr uint16_t targetFPS = 25;
+    constexpr std::chrono::duration<long, std::milli> msPerFrame(1000 / targetFPS);
 
     std::chrono::milliseconds sinceLastFPSPrint = 0ms;
 
     std::chrono::time_point<std::chrono::steady_clock, std::chrono::duration<long, std::milli>>  frameStart;
     std::chrono::time_point<std::chrono::steady_clock, std::chrono::duration<long, std::milli>>  frameEnd;
 
-    std::chrono::duration<long, std::milli> msPerFrame(1000 / targetFPS);
     std::chrono::duration<long, std::milli> frameLength;
 
     while(!glfwWindowShouldClose(app.window))
@@ -346,6 +348,8 @@ void mainLoop(VulkanApplication& app)
             framesPerSec = 0;
             sinceLastFPSPrint = 0ms;
         }
+
+        loopLogic(app);
 
         drawFrame(app);
         framesPerSec++;
@@ -486,10 +490,123 @@ static void framebufferResizeCallback(GLFWwindow* window, int width, int height)
     framebufferResized = true;
 }
 
-//void renderText(uint16_t x, uint16_t y, uint16_t width, uint16_t height, const char * text, const char * fontPath, uint8_t fontSize)
-//{
+void loopLogic(VulkanApplication& app)
+{
+    VulkanApplicationPipeline& texturesPipeline = app.pipelines[PipelineType::Texture];
+    VulkanApplicationPipeline& primativeShapesPipeline = app.pipelines[PipelineType::PrimativeShapes];
 
-//}
+    texturesPipeline.vertexStride = sizeof(Vertex);
+
+    std::string otherText = "How are you doing today? I hope you are doing well!";
+
+    uint16_t requiredVertices = static_cast<uint16_t>(otherText.size()) * VERTICES_PER_SQUARE;
+    uint16_t requiredIndices = static_cast<uint16_t>(otherText.size()) * INDICES_PER_SQUARE;
+
+    texturesPipeline.numVertices = requiredVertices;
+
+    Vertex * vertexPointer = reinterpret_cast<Vertex*>(texturesPipeline.pipelineMappedMemory + texturesPipeline.usageMap[static_cast<uint16_t>(MemoryUsageType::VERTEX_BUFFER)].offset);
+    uint16_t * indicesPointer = reinterpret_cast<uint16_t*>(texturesPipeline.pipelineMappedMemory + texturesPipeline.usageMap[static_cast<uint16_t>(MemoryUsageType::INDICES_BUFFER)].offset);
+
+    generateTextMeshes(indicesPointer, &vertexPointer->pos, sizeof(Vertex), 0, app.fontBitmap, &vertexPointer->texCoord, texturesPipeline.vertexStride, otherText, 150, 25);
+
+    texturesPipeline.numIndices = requiredIndices;
+
+    std::string moreText = "Im doing pretty good indeed";
+
+    generateTextMeshes( indicesPointer + requiredIndices,
+                        &(vertexPointer + requiredVertices)->pos,
+                        sizeof(Vertex),
+                        requiredVertices,
+                        app.fontBitmap,
+                        &(vertexPointer + requiredVertices)->texCoord,
+                        texturesPipeline.vertexStride,
+                        moreText, 150, 250);
+
+
+    texturesPipeline.numVertices += moreText.size() * VERTICES_PER_SQUARE;
+    texturesPipeline.numIndices += moreText.size() * INDICES_PER_SQUARE;
+
+    // Second pipeline
+
+    Vertex * basicVertexPointer = reinterpret_cast<Vertex*>(primativeShapesPipeline.pipelineMappedMemory + primativeShapesPipeline.usageMap[static_cast<uint16_t>(MemoryUsageType::VERTEX_BUFFER)].offset);
+    uint16_t * primativeShapesIndicesPointer = reinterpret_cast<uint16_t*>(primativeShapesPipeline.pipelineMappedMemory + primativeShapesPipeline.usageMap[static_cast<uint16_t>(MemoryUsageType::INDICES_BUFFER)].offset);
+
+    // TODO: Remove unnessecary copy from std::vectors
+    std::vector<BasicVertex> simpleShapesVertices = {
+        {{-0.5f, -1.0f}, {1.0f, 0.0f, 0.0f}},
+        {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+        {{-1.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+        {{-1.0f, -1.0f}, {1.0f, 0.0f, 0.0f}}
+    };
+
+    memcpy(basicVertexPointer, simpleShapesVertices.data(), simpleShapesVertices.size() * sizeof(BasicVertex));
+
+    std::vector<uint16_t> drawIndices = {
+        0, 1, 2, 2, 3, 0
+    };
+
+    memcpy(primativeShapesIndicesPointer, drawIndices.data(), drawIndices.size() * sizeof(uint16_t));
+
+    primativeShapesPipeline.numVertices = static_cast<uint32_t>(simpleShapesVertices.size());
+    primativeShapesPipeline.numIndices = static_cast<uint32_t>(drawIndices.size());
+    primativeShapesPipeline.vertexStride = sizeof(BasicVertex);
+
+    VkClearValue clearColor = { /* .color = */  {  /* .float32 = */  { 0.0f, 0.0f, 0.0f, 1.0f } } };
+
+    // wait.
+    vkDeviceWaitIdle(app.device);
+
+    for (size_t i = 0; i < app.commandBuffers.size(); i++)
+    {
+        VkCommandBufferBeginInfo beginInfo = {};
+        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+//        beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+        if (vkBeginCommandBuffer(app.commandBuffers[i], &beginInfo) != VK_SUCCESS) {
+            throw std::runtime_error("failed to begin recording command buffer!");
+        }
+
+        for(size_t layerIndex = 0; layerIndex < PipelineType::SIZE; layerIndex++)
+        {
+            VulkanApplicationPipeline& pipeline = app.pipelines[ app.pipelineDrawOrder[layerIndex] ];
+
+            VkRenderPassBeginInfo renderPassInfo = {};
+            renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+            renderPassInfo.renderPass = pipeline.renderPass;
+            renderPassInfo.framebuffer = pipeline.swapChainFramebuffers[i];
+            renderPassInfo.renderArea.offset = {0, 0};
+            renderPassInfo.renderArea.extent = app.swapChainExtent;
+
+            bool requiresInitialClear = (layerIndex == 0);
+
+            renderPassInfo.clearValueCount = (requiresInitialClear) ? 1 : 0;
+            renderPassInfo.pClearValues = (requiresInitialClear) ? &clearColor : nullptr;
+
+            vkCmdBeginRenderPass(app.commandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+                vkCmdBindPipeline(app.commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.graphicsPipeline);
+
+                VkBuffer vertexBuffers[] = {pipeline.vertexBuffer};
+                VkDeviceSize offsets[] = {0};
+                vkCmdBindVertexBuffers(app.commandBuffers[i], 0, 1, vertexBuffers, offsets);
+
+                vkCmdBindIndexBuffer(app.commandBuffers[i], pipeline.indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+
+                if(pipeline.pipelineLayout != nullptr && pipeline.descriptorSets.size() != 0) {
+                    vkCmdBindDescriptorSets(app.commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipelineLayout, 0, 1, &pipeline.descriptorSets[i], 0, nullptr);
+                }
+
+                vkCmdDrawIndexed(app.commandBuffers[i], pipeline.numIndices, 1, 0, 0, 0);
+
+            vkCmdEndRenderPass(app.commandBuffers[i]);
+        }
+
+        if (vkEndCommandBuffer(app.commandBuffers[i]) != VK_SUCCESS) {
+            throw std::runtime_error("failed to record command buffer!");
+        }
+    }
+
+}
 
 VulkanApplication setupApplication()
 {
@@ -643,6 +760,7 @@ VulkanApplication setupApplication()
     VkCommandPoolCreateInfo commandPoolInfo = {};
     commandPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     commandPoolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
+    commandPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
     if (vkCreateCommandPool(app.device, &commandPoolInfo, nullptr, &app.commandPool) != VK_SUCCESS) {
         throw std::runtime_error("failed to create graphics command pool!");
@@ -662,32 +780,31 @@ VulkanApplication setupApplication()
         assert(false && "Failed to load font");
     }
 
-    FT_Select_Charmap(face, FT_ENCODING_UNICODE );
+    FT_Select_Charmap(face, FT_ENCODING_UNICODE);
 
 //    assert(FT_HAS_KERNING( face ));
 
     FT_Set_Pixel_Sizes(face, 0, 28);
 
-    FontBitmap fontBitmap;
-    fontBitmap.face = face;
+    app.fontBitmap.face = face;
 
     std::string unique_chars = "abcdefghijklmnopqrstuvwxyz \"ABCDEFGHIJKLMNOPQRSTUVWXYZ.<>!?";
     uint16_t cellSize = 40; // TODO: No assert for when this gets too small
     uint16_t cellsPerLine = 10;
 
-    instanciateFontBitmap(fontBitmap, face, unique_chars.c_str(), cellsPerLine, cellSize );
+    instanciateFontBitmap(app.fontBitmap, face, unique_chars.c_str(), cellsPerLine, cellSize );
 
     FT_Done_Face(face);
     FT_Done_FreeType(ft);
 
-    // TODO: Part of pipeline setup??
+//    // TODO: Part of pipeline setup??
     createTextureImage( app.device,
                         app.physicalDevice,
                         app.commandPool,
                         app.graphicsQueue,
-                        reinterpret_cast<uint8_t *>(fontBitmap.bitmap_data),
-                        fontBitmap.texture_width,
-                        fontBitmap.texture_height,
+                        reinterpret_cast<uint8_t *>(app.fontBitmap.bitmap_data),
+                        app.fontBitmap.texture_width,
+                        app.fontBitmap.texture_height,
                         texturesPipeline.textureImage,
                         texturesPipeline.textureImageMemory);
 
@@ -716,37 +833,37 @@ VulkanApplication setupApplication()
 
     // Create Texture Sampler END
 
-    texturesPipeline.vertexStride = sizeof(Vertex);
+//    texturesPipeline.vertexStride = sizeof(Vertex);
 
-    std::string otherText = "How are you doing today? I hope you are doing well!";
+//    std::string otherText = "How are you doing today? I hope you are doing well!";
 
-    uint16_t requiredVertices = static_cast<uint16_t>(otherText.size()) * VERTICES_PER_SQUARE;
-    uint16_t requiredIndices = static_cast<uint16_t>(otherText.size()) * INDICES_PER_SQUARE;
+//    uint16_t requiredVertices = static_cast<uint16_t>(otherText.size()) * VERTICES_PER_SQUARE;
+//    uint16_t requiredIndices = static_cast<uint16_t>(otherText.size()) * INDICES_PER_SQUARE;
 
-    // TODO: Make +=
-    texturesPipeline.numVertices = requiredVertices;
+//    // TODO: Make +=
+//    texturesPipeline.numVertices = requiredVertices;
 
-    Vertex * vertexPointer = reinterpret_cast<Vertex*>(texturesPipeline.pipelineMappedMemory + texturesPipeline.usageMap[static_cast<uint16_t>(MemoryUsageType::VERTEX_BUFFER)].offset);
-    uint16_t * indicesPointer = reinterpret_cast<uint16_t*>(texturesPipeline.pipelineMappedMemory + texturesPipeline.usageMap[static_cast<uint16_t>(MemoryUsageType::INDICES_BUFFER)].offset);
+//    Vertex * vertexPointer = reinterpret_cast<Vertex*>(texturesPipeline.pipelineMappedMemory + texturesPipeline.usageMap[static_cast<uint16_t>(MemoryUsageType::VERTEX_BUFFER)].offset);
+//    uint16_t * indicesPointer = reinterpret_cast<uint16_t*>(texturesPipeline.pipelineMappedMemory + texturesPipeline.usageMap[static_cast<uint16_t>(MemoryUsageType::INDICES_BUFFER)].offset);
 
-    generateTextMeshes(indicesPointer, &vertexPointer->pos, sizeof(Vertex), 0, fontBitmap, &vertexPointer->texCoord, texturesPipeline.vertexStride, otherText, 150, 25);
+//    generateTextMeshes(indicesPointer, &vertexPointer->pos, sizeof(Vertex), 0, fontBitmap, &vertexPointer->texCoord, texturesPipeline.vertexStride, otherText, 150, 25);
 
-    texturesPipeline.numIndices += requiredIndices;
+//    texturesPipeline.numIndices += requiredIndices;
 
-    std::string moreText = "Im doing pretty good indeed";
+//    std::string moreText = "Im doing pretty good indeed";
 
-    generateTextMeshes( indicesPointer + requiredIndices,
-                        &(vertexPointer + requiredVertices)->pos,
-                        sizeof(Vertex),
-                        requiredVertices,
-                        fontBitmap,
-                        &(vertexPointer + requiredVertices)->texCoord,
-                        texturesPipeline.vertexStride,
-                        moreText, 150, 250);
+//    generateTextMeshes( indicesPointer + requiredIndices,
+//                        &(vertexPointer + requiredVertices)->pos,
+//                        sizeof(Vertex),
+//                        requiredVertices,
+//                        fontBitmap,
+//                        &(vertexPointer + requiredVertices)->texCoord,
+//                        texturesPipeline.vertexStride,
+//                        moreText, 150, 250);
 
 
-    texturesPipeline.numVertices += moreText.size() * VERTICES_PER_SQUARE;
-    texturesPipeline.numIndices += moreText.size() * INDICES_PER_SQUARE;
+//    texturesPipeline.numVertices += moreText.size() * VERTICES_PER_SQUARE;
+//    texturesPipeline.numIndices += moreText.size() * INDICES_PER_SQUARE;
 
     // This flushes memory to device local
     createBufferOnMemory(   app.device,
@@ -765,28 +882,28 @@ VulkanApplication setupApplication()
 
 {   // BEGIN generate mesh for `primativeShapes` pipeline
 
-    Vertex * basicVertexPointer = reinterpret_cast<Vertex*>(primativeShapesPipeline.pipelineMappedMemory + primativeShapesPipeline.usageMap[static_cast<uint16_t>(MemoryUsageType::VERTEX_BUFFER)].offset);
-    uint16_t * primativeShapesIndicesPointer = reinterpret_cast<uint16_t*>(primativeShapesPipeline.pipelineMappedMemory + primativeShapesPipeline.usageMap[static_cast<uint16_t>(MemoryUsageType::INDICES_BUFFER)].offset);
+//    Vertex * basicVertexPointer = reinterpret_cast<Vertex*>(primativeShapesPipeline.pipelineMappedMemory + primativeShapesPipeline.usageMap[static_cast<uint16_t>(MemoryUsageType::VERTEX_BUFFER)].offset);
+//    uint16_t * primativeShapesIndicesPointer = reinterpret_cast<uint16_t*>(primativeShapesPipeline.pipelineMappedMemory + primativeShapesPipeline.usageMap[static_cast<uint16_t>(MemoryUsageType::INDICES_BUFFER)].offset);
 
-    // TODO: Remove unnessecary copy from std::vectors
-    std::vector<BasicVertex> simpleShapesVertices = {
-        {{-0.5f, -1.0f}, {1.0f, 0.0f, 0.0f}},
-        {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-        {{-1.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-        {{-1.0f, -1.0f}, {1.0f, 0.0f, 0.0f}}
-    };
+//    // TODO: Remove unnessecary copy from std::vectors
+//    std::vector<BasicVertex> simpleShapesVertices = {
+//        {{-0.5f, -1.0f}, {1.0f, 0.0f, 0.0f}},
+//        {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+//        {{-1.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+//        {{-1.0f, -1.0f}, {1.0f, 0.0f, 0.0f}}
+//    };
 
-    memcpy(basicVertexPointer, simpleShapesVertices.data(), simpleShapesVertices.size() * sizeof(BasicVertex));
+//    memcpy(basicVertexPointer, simpleShapesVertices.data(), simpleShapesVertices.size() * sizeof(BasicVertex));
 
-    std::vector<uint16_t> drawIndices = {
-        0, 1, 2, 2, 3, 0
-    };
+//    std::vector<uint16_t> drawIndices = {
+//        0, 1, 2, 2, 3, 0
+//    };
 
-    memcpy(primativeShapesIndicesPointer, drawIndices.data(), drawIndices.size() * sizeof(uint16_t));
+//    memcpy(primativeShapesIndicesPointer, drawIndices.data(), drawIndices.size() * sizeof(uint16_t));
 
-    primativeShapesPipeline.numVertices = static_cast<uint32_t>(simpleShapesVertices.size());
-    primativeShapesPipeline.numIndices = static_cast<uint32_t>(drawIndices.size());
-    primativeShapesPipeline.vertexStride = sizeof(BasicVertex);
+//    primativeShapesPipeline.numVertices = static_cast<uint32_t>(simpleShapesVertices.size());
+//    primativeShapesPipeline.numIndices = static_cast<uint32_t>(drawIndices.size());
+//    primativeShapesPipeline.vertexStride = sizeof(BasicVertex);
 
     createBufferOnMemory(   app.device,
                             primativeShapesPipeline.usageMap[static_cast<uint16_t>(MemoryUsageType::VERTEX_BUFFER)].size,
@@ -879,56 +996,56 @@ VulkanApplication setupApplication()
         throw std::runtime_error("failed to allocate command buffers!");
     }
 
-    VkClearValue clearColor = { /* .color = */  {  /* .float32 = */  { 0.0f, 0.0f, 0.0f, 1.0f } } };
+//    VkClearValue clearColor = { /* .color = */  {  /* .float32 = */  { 0.0f, 0.0f, 0.0f, 1.0f } } };
 
-    for (size_t i = 0; i < app.commandBuffers.size(); i++)
-    {
-        VkCommandBufferBeginInfo beginInfo = {};
-        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+//    for (size_t i = 0; i < app.commandBuffers.size(); i++)
+//    {
+//        VkCommandBufferBeginInfo beginInfo = {};
+//        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
-        if (vkBeginCommandBuffer(app.commandBuffers[i], &beginInfo) != VK_SUCCESS) {
-            throw std::runtime_error("failed to begin recording command buffer!");
-        }
+//        if (vkBeginCommandBuffer(app.commandBuffers[i], &beginInfo) != VK_SUCCESS) {
+//            throw std::runtime_error("failed to begin recording command buffer!");
+//        }
 
-        for(size_t layerIndex = 0; layerIndex < PipelineType::SIZE; layerIndex++)
-        {
-            VulkanApplicationPipeline& pipeline = app.pipelines[ app.pipelineDrawOrder[layerIndex] ];
+//        for(size_t layerIndex = 0; layerIndex < PipelineType::SIZE; layerIndex++)
+//        {
+//            VulkanApplicationPipeline& pipeline = app.pipelines[ app.pipelineDrawOrder[layerIndex] ];
 
-            VkRenderPassBeginInfo renderPassInfo = {};
-            renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-            renderPassInfo.renderPass = pipeline.renderPass;
-            renderPassInfo.framebuffer = pipeline.swapChainFramebuffers[i];
-            renderPassInfo.renderArea.offset = {0, 0};
-            renderPassInfo.renderArea.extent = app.swapChainExtent;
+//            VkRenderPassBeginInfo renderPassInfo = {};
+//            renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+//            renderPassInfo.renderPass = pipeline.renderPass;
+//            renderPassInfo.framebuffer = pipeline.swapChainFramebuffers[i];
+//            renderPassInfo.renderArea.offset = {0, 0};
+//            renderPassInfo.renderArea.extent = app.swapChainExtent;
 
-            bool requiresInitialClear = (layerIndex == 0);
+//            bool requiresInitialClear = (layerIndex == 0);
 
-            renderPassInfo.clearValueCount = (requiresInitialClear) ? 1 : 0;
-            renderPassInfo.pClearValues = (requiresInitialClear) ? &clearColor : nullptr;
+//            renderPassInfo.clearValueCount = (requiresInitialClear) ? 1 : 0;
+//            renderPassInfo.pClearValues = (requiresInitialClear) ? &clearColor : nullptr;
 
-            vkCmdBeginRenderPass(app.commandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+//            vkCmdBeginRenderPass(app.commandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-                vkCmdBindPipeline(app.commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.graphicsPipeline);
+//                vkCmdBindPipeline(app.commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.graphicsPipeline);
 
-                VkBuffer vertexBuffers[] = {pipeline.vertexBuffer};
-                VkDeviceSize offsets[] = {0};
-                vkCmdBindVertexBuffers(app.commandBuffers[i], 0, 1, vertexBuffers, offsets);
+//                VkBuffer vertexBuffers[] = {pipeline.vertexBuffer};
+//                VkDeviceSize offsets[] = {0};
+//                vkCmdBindVertexBuffers(app.commandBuffers[i], 0, 1, vertexBuffers, offsets);
 
-                vkCmdBindIndexBuffer(app.commandBuffers[i], pipeline.indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+//                vkCmdBindIndexBuffer(app.commandBuffers[i], pipeline.indexBuffer, 0, VK_INDEX_TYPE_UINT16);
 
-                if(pipeline.pipelineLayout != nullptr && pipeline.descriptorSets.size() != 0) {
-                    vkCmdBindDescriptorSets(app.commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipelineLayout, 0, 1, &pipeline.descriptorSets[i], 0, nullptr);
-                }
+//                if(pipeline.pipelineLayout != nullptr && pipeline.descriptorSets.size() != 0) {
+//                    vkCmdBindDescriptorSets(app.commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipelineLayout, 0, 1, &pipeline.descriptorSets[i], 0, nullptr);
+//                }
 
-                vkCmdDrawIndexed(app.commandBuffers[i], pipeline.numIndices, 1, 0, 0, 0);
+//                vkCmdDrawIndexed(app.commandBuffers[i], pipeline.numIndices, 1, 0, 0, 0);
 
-            vkCmdEndRenderPass(app.commandBuffers[i]);
-        }
+//            vkCmdEndRenderPass(app.commandBuffers[i]);
+//        }
 
-        if (vkEndCommandBuffer(app.commandBuffers[i]) != VK_SUCCESS) {
-            throw std::runtime_error("failed to record command buffer!");
-        }
-    }
+//        if (vkEndCommandBuffer(app.commandBuffers[i]) != VK_SUCCESS) {
+//            throw std::runtime_error("failed to record command buffer!");
+//        }
+//    }
 
     // Create Command Buffers END
 

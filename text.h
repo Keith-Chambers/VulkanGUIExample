@@ -15,40 +15,6 @@
 #include "typesvulkan.h"
 #include "config.h"
 
-struct CharBitmap
-{
-    uint16_t width;
-    uint16_t height;
-    uint8_t * data_view;
-    int16_t relative_baseline;
-    int16_t horizontal_advance;
-    FT_Long glyph_index;
-};
-
-struct NormalizedPosition
-{
-    float x;
-    float y;
-};
-
-struct FontBitmap
-{
-    std::unordered_map<char, std::tuple<CharBitmap, NormalizedPosition>> char_data;
-    uint32_t texture_width;
-    uint32_t texture_height;
-
-    uint32_t current_x_cell;
-    uint32_t current_y_cell;
-    uint16_t cell_size;
-
-    FT_Face face;
-
-    RGBA_8UNORM * bitmap_data;
-
-    static bool instanciate_char_bitmap(FontBitmap& font_bitmap, FT_Face& face, const char c);
-
-};
-
 struct GenerateTextMeshesParams {
     uint16_t indicesStart;
     glm::vec2 * verticesStart;

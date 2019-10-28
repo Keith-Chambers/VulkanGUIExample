@@ -27,6 +27,8 @@ void recreateSwapChain(VulkanApplication& app);
 void drawFrame(VulkanApplication& app);
 void mainLoop(VulkanApplication& app);
 
+void loopLogic(VulkanApplication& app);
+
 void createVertexBuffer(    const VkDevice device,
                             const VkPhysicalDevice physicalDevice,
                             const VkQueue graphicsQueue,

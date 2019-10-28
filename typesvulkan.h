@@ -4,10 +4,32 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
+#include <ft2build.h>
+#include FT_FREETYPE_H
+
 #include <glm/glm.hpp>
 #include <vector>
 #include <string>
 #include <array>
+#include <ctype.h>
+#include <unordered_map>
+#include <tuple>
+
+struct CharBitmap
+{
+    uint16_t width;
+    uint16_t height;
+    uint8_t * data_view;
+    int16_t relative_baseline;
+    int16_t horizontal_advance;
+    FT_Long glyph_index;
+};
+
+struct NormalizedPosition
+{
+    float x;
+    float y;
+};
 
 typedef struct RGBA_8UNORM {
     uint8_t r;
@@ -15,6 +37,23 @@ typedef struct RGBA_8UNORM {
     uint8_t b;
     uint8_t a;
 } RGBA_8UNORM;
+
+struct FontBitmap
+{
+    std::unordered_map<char, std::tuple<CharBitmap, NormalizedPosition>> char_data;
+    uint32_t texture_width;
+    uint32_t texture_height;
+
+    uint32_t current_x_cell;
+    uint32_t current_y_cell;
+    uint16_t cell_size;
+
+    FT_Face face;
+
+    RGBA_8UNORM * bitmap_data;
+
+    static bool instanciate_char_bitmap(FontBitmap& font_bitmap, FT_Face& face, const char c);
+};
 
 typedef struct Glyph
 {
@@ -236,6 +275,7 @@ struct VulkanApplication
 
     std::array<PipelineType, static_cast<uint8_t>(PipelineType::SIZE)> pipelineDrawOrder;
     std::array<VulkanApplicationPipeline, static_cast<size_t>(PipelineType::SIZE)> pipelines;
+    FontBitmap fontBitmap;
 
     void setPipeline(VulkanApplicationPipeline&& pipeline, PipelineType tag)
     {

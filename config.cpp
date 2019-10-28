@@ -6,7 +6,7 @@ namespace vconfig {
     const uint16_t INITIAL_WINDOW_HEIGHT = 600;
     const uint16_t INITIAL_WINDOW_WIDTH = 800;
     const bool ENABLE_DEBUG_LAYERS = true;
-    const uint32_t PIPELINE_MEMORY_SIZE = 65536;
+    const uint32_t PIPELINE_MEMORY_SIZE = 65536 * 2;
 }
 
 //    const std::string FONT_PATH = "/usr/share/fonts/TTF/DejaVuSans.ttf";
