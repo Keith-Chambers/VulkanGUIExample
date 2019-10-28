@@ -149,6 +149,14 @@ struct UITypeMeshBinding
     uint16_t indexLength;
 };
 
+enum class MemoryUsageType { VERTEX_BUFFER = 0, INDICES_BUFFER, SIZE };
+
+struct MemoryUsageMap
+{
+    uint32_t offset;
+    uint32_t size;
+};
+
 struct VulkanApplicationPipeline
 {
     VkRenderPass renderPass = nullptr;
@@ -157,9 +165,7 @@ struct VulkanApplicationPipeline
     VkPipeline graphicsPipeline = nullptr;
 
     VkBuffer vertexBuffer = nullptr;
-    VkDeviceMemory vertexBufferMemory = nullptr;        // Remove
     VkBuffer indexBuffer = nullptr;
-    VkDeviceMemory indexBufferMemory = nullptr;         // Remove
 
     VkDescriptorPool descriptorPool = nullptr;
     std::vector<VkDescriptorSet> descriptorSets;
@@ -170,20 +176,22 @@ struct VulkanApplicationPipeline
     VkSampler textureSampler = nullptr;
 
     // Refactor Start
+    uint8_t * pipelineMappedMemory;
+    uint32_t pipelineMemorySize;
+    // TODO: Create something that overloads the [] operator to take a MemoryUsageType as an index value so static_cast is no longer required
+    MemoryUsageMap usageMap[static_cast<uint16_t>(MemoryUsageType::SIZE)];
+    uint32_t numIndices;
+    uint32_t numVertices;
 
-    uint8_t * mappedVertexData;
-    uint8_t * mappedIndexData;
     VkDeviceMemory pipelineMemory;
     UITypeMeshBinding uiComponentsMap[100];
 
     // Refactor End
 
     std::vector<VkFramebuffer> swapChainFramebuffers;
-    std::vector<uint16_t> drawIndices;
 
-    glm::vec2 * vertexDataStart;
-    uint32_t vertexDataStride;
-    uint32_t numVertices;
+//    glm::vec2 * vertexDataStart;
+    uint16_t vertexStride;
 
     PipelineSetupData setupCache;
 };

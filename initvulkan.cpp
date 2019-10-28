@@ -84,14 +84,16 @@ void cleanup(VulkanApplication& app)
 
         vkDestroyDescriptorSetLayout(app.device, pipeline.descriptorSetLayout, nullptr);
 
-        if(pipeline.indexBuffer != nullptr && pipeline.indexBufferMemory != nullptr) {
+        if(pipeline.indexBuffer != nullptr) {
             vkDestroyBuffer(app.device, pipeline.indexBuffer, nullptr);
-            vkFreeMemory(app.device, pipeline.indexBufferMemory, nullptr);
         }
 
-        if(pipeline.vertexBuffer != nullptr && pipeline.vertexBufferMemory != nullptr) {
+        if(pipeline.vertexBuffer != nullptr) {
             vkDestroyBuffer(app.device, pipeline.vertexBuffer, nullptr);
-            vkFreeMemory(app.device, pipeline.vertexBufferMemory, nullptr);
+        }
+
+        if(pipeline.pipelineMemory != nullptr) {
+            vkFreeMemory(app.device, pipeline.pipelineMemory, nullptr);
         }
     }
 
