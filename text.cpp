@@ -4,6 +4,11 @@ static bool mapCharTextureToMesh(FontBitmap& font_bitmap, const char c, glm::vec
 static void printGlyphInformation(FT_GlyphSlot glyph);
 static void createRectMesh(uint16_t * indices, glm::vec2 * vertices, uint16_t vertices_stride_bytes, uint16_t start_vertex_index, float x, float y, float height, float width);
 
+inline double signedNormalizedPixelDistance(int32_t pos1, int32_t pos2, uint32_t globalRangePixels)
+{
+
+}
+
 inline double signedNormalizePixelPosition(uint32_t position_pixels, uint32_t length_pixels)
 {
     assert(position_pixels <= length_pixels);
@@ -117,9 +122,9 @@ bool FontBitmap::instanciate_char_bitmap(FontBitmap& font_bitmap, FT_Face& face,
 
         for(uint16_t x = 0; x < bitmap_width; x++)
         {
-            (current_pixel + (y * texture_width) + x)->r = *(face->glyph->bitmap.buffer + (src_y_index * bitmap_width) + x);
-            (current_pixel + (y * texture_width) + x)->g = *(face->glyph->bitmap.buffer + (src_y_index * bitmap_width) + x);
-            (current_pixel + (y * texture_width) + x)->b = *(face->glyph->bitmap.buffer + (src_y_index * bitmap_width) + x);
+            (current_pixel + (y * texture_width) + x)->r = 255 - *(face->glyph->bitmap.buffer + (src_y_index * bitmap_width) + x);
+            (current_pixel + (y * texture_width) + x)->g = 255 - *(face->glyph->bitmap.buffer + (src_y_index * bitmap_width) + x);
+            (current_pixel + (y * texture_width) + x)->b = 255 - *(face->glyph->bitmap.buffer + (src_y_index * bitmap_width) + x);
             (current_pixel + (y * texture_width) + x)->a = *(face->glyph->bitmap.buffer + (src_y_index * bitmap_width) + x);
         }
     }
@@ -172,7 +177,7 @@ bool setupBitmapForCharacterSet( FontBitmap& font_bitmap,
     return true;
 }
 
-void createRectMesh(uint16_t * indices, glm::vec2 * vertices, uint16_t vertices_stride_bytes, uint16_t start_vertex_index, float x, float y, float height, float width)
+inline void createRectMesh(uint16_t * indices, glm::vec2 * vertices, uint16_t vertices_stride_bytes, uint16_t start_vertex_index, float x, float y, float height, float width)
 {
     uint8_t * data = reinterpret_cast<uint8_t *>(vertices);
 
@@ -182,7 +187,7 @@ void createRectMesh(uint16_t * indices, glm::vec2 * vertices, uint16_t vertices_
     *reinterpret_cast<glm::vec2 *>( (data + (3 * vertices_stride_bytes)) ) = {x, y + height};            // Bottom left
 
 //    printf("Pushing back triangle -> \n {%f, %f} {%f, %f},\n {%f, %f} {%f, %f}\n", x, y, x, y + height, x + width, y, x + width, y + height);
-    fflush(stdout);
+//    fflush(stdout);
 
     *(indices + 0) = start_vertex_index;
     *(indices + 1) = start_vertex_index + 1;
@@ -200,6 +205,96 @@ void printGlyphInformation(FT_GlyphSlot glyph)
     printf("Top: %d\n", glyph->bitmap_top);
     printf("X: %ld\n", glyph->advance.x);
     printf("Y: %ld\n", glyph->advance.y);
+}
+
+void generateTextMeshes(GenerateTextMeshesParams& p)
+{
+    float xPosPixels = static_cast<float>(signedNormalizePixelPosition(p.xPos, p.windowWidth));
+    float yPosPixels = static_cast<float>(signedNormalizePixelPosition(p.yPos + TEXT_LINE_SPACING, p.windowHeight));
+
+    float norm_line_spacing = static_cast<float>(unsignedNormalizePixelPosition(TEXT_LINE_SPACING, p.windowHeight));
+
+    // float start_x_pos = x_pos;
+    double max_width_point = static_cast<double>(xPosPixels) + unsignedNormalizePixelPosition(MAX_LINE_WIDTH, p.windowWidth);
+
+    float faceWidth;
+    float faceHeight;
+
+    char c;
+    uint16_t currentCharIndex = 0;
+
+    while(*(p.text + currentCharIndex) != '\0')
+    {
+        CharBitmap char_data = std::get<0>(p.fontBitmap.char_data[c]);
+
+        faceWidth =  static_cast<float>(unsignedNormalizePixelPosition(char_data.width, vconfig::INITIAL_WINDOW_WIDTH));
+        faceHeight = static_cast<float>(unsignedNormalizePixelPosition(char_data.height, vconfig::INITIAL_WINDOW_HEIGHT));
+
+        assert(std::get<0>(p.fontBitmap.char_data[c]).relative_baseline > 0);
+
+        uint16_t charactorYBaseline = static_cast<uint16_t>(std::get<0>(p.fontBitmap.char_data[c]).relative_baseline);
+        double normRelativeYBaseline = unsignedNormalizePixelPosition(charactorYBaseline, p.windowHeight);
+
+        int16_t relativeKearningOffset = char_data.horizontal_advance / 70;
+
+        createRectMesh(p.indicesStart, p.verticesStart, p.verticesStrideBytes, p.startingVertexIndex, xPosPixels, yPosPixels + (normRelativeYBaseline * 1.8) + (norm_line_spacing - faceHeight), faceHeight, faceWidth);
+
+        p.startingVertexIndex += 4;
+        p.indicesStart += 6;
+
+        p.verticesStart = reinterpret_cast<glm::vec2 *>( reinterpret_cast<uint8_t *>(p.verticesStart) + (4 * p.verticesStrideBytes) );
+        mapCharTextureToMesh(p.fontBitmap, c, p.textureMapStart, p.textureMapStrideBytes);
+
+        uint8_t * bytePos = reinterpret_cast<uint8_t *>(p.textureMapStart);
+
+        // Move texture mapping array pointer forward
+        bytePos += p.textureMapStrideBytes * 4;
+        p.textureMapStart = reinterpret_cast<glm::vec2 *>(bytePos);
+
+        // TODO: You're gonna need the advance, kearning, etc. Monospace atm
+        xPosPixels += static_cast<float>(unsignedNormalizePixelPosition(TEXT_SPACING + relativeKearningOffset, vconfig::INITIAL_WINDOW_WIDTH));
+
+        if(xPosPixels > max_width_point)
+        {
+            xPosPixels = max_width_point - static_cast<float>(unsignedNormalizePixelPosition(MAX_LINE_WIDTH, vconfig::INITIAL_WINDOW_WIDTH));
+            yPosPixels += norm_line_spacing;
+        }
+
+        currentCharIndex++;
+    }
+}
+
+void updateAddVertexPositions(  glm::vec2 * vertices,
+                                uint32_t numberVertices,
+                                uint32_t verticesStrideBytes,
+                                float addToX,
+                                float addToY )
+{
+    while(numberVertices-- != 0)
+    {
+        vertices->y += addToY;
+        vertices->x += addToX;
+
+        // Move forward by stride
+        vertices = reinterpret_cast<glm::vec2 *>( reinterpret_cast<uint8_t *>(vertices) + verticesStrideBytes );
+    }
+}
+
+void updateMultVertexPositions( glm::vec2 * vertices,
+                                uint32_t numberVertices,
+                                uint32_t verticesStrideBytes,
+                                float multByX,
+                                float multByY )
+{
+    while(numberVertices-- != 0)
+    {
+        vertices->x /= multByX;
+        vertices->y /= multByY;
+//        numberVertices--;
+
+        // Move forward by stride
+        vertices = reinterpret_cast<glm::vec2 *>( reinterpret_cast<uint8_t *>(vertices) + verticesStrideBytes );
+    }
 }
 
 void generateTextMeshes(   uint16_t * indices,

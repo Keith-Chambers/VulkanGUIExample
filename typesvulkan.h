@@ -15,6 +15,8 @@
 #include <unordered_map>
 #include <tuple>
 
+#include "entity.h"
+
 struct CharBitmap
 {
     uint16_t width;
@@ -61,6 +63,9 @@ typedef struct Glyph
     uint16_t width;
     RGBA_8UNORM * data;
 } Glyph;
+
+static_assert(sizeof(glm::vec3) == sizeof(float) * 3);
+static_assert(sizeof(float) == 4);
 
 struct BasicVertex {
     glm::vec2 pos;
@@ -176,12 +181,14 @@ struct PipelineSetupData {
     std::vector<VkVertexInputAttributeDescription> vertexAttributeDescriptions;
 };
 
-enum class UITYPE { BUTTON, TEXT };
+enum class UIType { NOT = 0, SHAPE, BUTTON, TEXT, SIZE };
+
+enum class GraphicsUpdateDependency { STATIC, ALL, SIZE };
 
 struct UITypeMeshBinding
 {
-
-    UITYPE type;
+    UIType type;
+    GraphicsUpdateDependency updateDependency;
     uint32_t indexStartIndex;
     uint32_t vertexStartIndex;
     uint16_t vertexLength;
@@ -241,6 +248,54 @@ enum PipelineType {
     SIZE
 };
 
+namespace TimeDependentOperations
+{
+    constexpr uint8_t LinearAdd =   0b00000001;
+    // Rest here
+    constexpr uint8_t SIZE =        0b11111111;
+}
+
+struct RelatedVertices
+{
+    uint8_t * start;
+    uint8_t number;
+    uint8_t stride;
+};
+
+//uint8_t entitityTimeBasedOpBinding[50];
+
+//inline void linearAdd(Entity32 entity, uint32_t time)
+//{
+////    RelatedVertices uiComponent = getVerticesForEntity();
+//}
+
+// Do things in chucks of 65k
+
+//struct VertexBindingGrouping
+//{
+//    uint8_t * basePointer;
+//    uint32_t numberBoundVertices;
+//    uint16_t stride;
+//    RelativeDataLocation boundVerticesOffsets[20];
+//};
+
+//void onTimeUpdateExperimental(Entity32 uiComponentVertices)
+//{
+//    RelativeDataLocation toUpdate = timeDependentEntityVertices[uiComponentVertices];
+//}
+
+//void doTimeDependentOperations(uint8_t entitityTimeBasedOpBinding[50], uint32_t time)
+//{
+//    for(Entity32 i = 0; i < 50; i++)
+//    {
+//        if(entitityTimeBasedOpBinding[i] & TimeDependentOperations::LinearAdd) {
+//            linearAdd(i, time);
+//        }
+//    }
+//}
+
+enum class OnUpdateFunctions { LinearAdd = 0, SIZE };
+
 struct VulkanApplication
 {
     GLFWwindow* window;
@@ -272,6 +327,23 @@ struct VulkanApplication
     std::vector<VkSemaphore> renderFinishedSemaphores;
     std::vector<VkFence> inFlightFences;
     size_t currentFrame = 0;
+
+    uint32_t allocatedVerticesMemory;
+    uint32_t freeVerticesMemory;
+    VkDeviceMemory verticesMemory;
+    uint8_t * mappedVerticesMemory;
+
+    uint32_t allocatedIndicesMemory;
+    uint32_t freeIndicesMemory;
+    VkDeviceMemory indicesMemory;
+    uint8_t * mappedIndicesMemory;
+
+
+    /* Entity Stuff */
+
+    EntitySystemHandle entitySystem;
+
+    /* Entity Stuff end */
 
     std::array<PipelineType, static_cast<uint8_t>(PipelineType::SIZE)> pipelineDrawOrder;
     std::array<VulkanApplicationPipeline, static_cast<size_t>(PipelineType::SIZE)> pipelines;

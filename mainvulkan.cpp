@@ -492,6 +492,29 @@ static void framebufferResizeCallback(GLFWwindow* window, int width, int height)
     framebufferResized = true;
 }
 
+/*
+    Each UI component can go through N amount of time dependent transformations.
+    Ideally, you want to do all transformations for each set of vertices together
+
+    This would sugest the following data layout
+
+    For each UI component, define all the transforms which apply.
+    So it's more like a transform subscribes to a set of vertices than the other way around
+
+    You can use bits for this
+*/
+
+/*
+    Reusing a predefined address vs using pointers?
+
+    I guess the former doesn't require the instanciation of a pointer.
+    The address would be hardcoded into the function.
+
+    Very assembly like
+    Maybe setup a seperate stack..
+ */
+
+
 void onTimeUpdate(VulkanApplication& app, uint32_t delta)
 {
     //    VulkanApplicationPipeline& texturesPipeline = app.pipelines[PipelineType::Texture];
@@ -504,8 +527,17 @@ void onTimeUpdate(VulkanApplication& app, uint32_t delta)
                              0);
 }
 
+void onTimeUpdateExperimental(VulkanApplication& app, uint32_t delta)
+{
+    for(uint16_t i = 0; i < app.entitySystem.exampleTimeUpdateListSize; i++) {
+        RelativeDataLocation& verticesTarget = app.entitySystem.verticesComponent[app.entitySystem.exampleTimeUpdateList[i]];
+        updateAddVertexPositions(reinterpret_cast<glm::vec2*>(app.entitySystem.verticesComponentBasePtr + verticesTarget.offsetBytes), verticesTarget.spanElements, verticesTarget.strideBytes, 0.001f, 0.001f);
+    }
+}
+
 void loopLogic(VulkanApplication& app, std::chrono::milliseconds delta)
 {
+    onTimeUpdateExperimental(app, 0);
 
 //    int width = 0, height = 0;
 
@@ -714,6 +746,10 @@ void loadInitialMeshData(VulkanApplication& app, uint32_t delta)
     // TODO: generateTextMeshes needs to be split up so that I can update just the vertex data
     generateTextMeshes(indicesPointer, &vertexPointer->pos, sizeof(Vertex), 0, app.fontBitmap, &vertexPointer->texCoord, texturesPipeline.vertexStride, otherText, 150, 25);
 
+    app.entitySystem.verticesComponent[app.entitySystem.nextEntity] = { 0, requiredVertices, texturesPipeline.vertexStride };
+    app.entitySystem.numberVerticesComponents++;
+    app.entitySystem.nextEntity++;
+
     texturesPipeline.uiComponentsMap[0] = {
         UIType::TEXT,
         GraphicsUpdateDependency::STATIC,
@@ -739,6 +775,16 @@ void loadInitialMeshData(VulkanApplication& app, uint32_t delta)
     texturesPipeline.numVertices += moreText.size() * VERTICES_PER_SQUARE;
     texturesPipeline.numIndices += moreText.size() * INDICES_PER_SQUARE;
 
+    app.entitySystem.verticesComponent[app.entitySystem.nextEntity] =
+    {
+        app.entitySystem.verticesComponent[app.entitySystem.nextEntity - 1].spanElements,
+        static_cast<uint16_t>(moreText.size() * VERTICES_PER_SQUARE),
+        texturesPipeline.vertexStride
+    };
+
+    app.entitySystem.numberVerticesComponents++;
+    app.entitySystem.nextEntity++;
+
     texturesPipeline.uiComponentsMap[1] = {
         UIType::TEXT,
         GraphicsUpdateDependency::STATIC,
@@ -754,13 +800,13 @@ void loadInitialMeshData(VulkanApplication& app, uint32_t delta)
     uint16_t * primativeShapesIndicesPointer = reinterpret_cast<uint16_t*>(app.mappedIndicesMemory + primativeShapesPipeline.usageMap[static_cast<uint16_t>(MemoryUsageType::INDICES_BUFFER)].offset);
 
     // TODO: Remove unnessecary copy from std::vectors
-    float xOffset = static_cast<float>(delta) / 25.0f;
+//    float xOffset = static_cast<float>(delta) / 25.0f;
 
     std::vector<BasicVertex> simpleShapesVertices = {
-        {{-0.5f + xOffset, -1.0f}, {1.0f, 0.0f, 0.0f}},
-        {{-0.5f + xOffset, -0.5f}, {1.0f, 0.0f, 0.0f}},
-        {{-1.0f + xOffset, -0.5f}, {1.0f, 0.0f, 0.0f}},
-        {{-1.0f + xOffset, -1.0f}, {1.0f, 0.0f, 0.0f}}
+        {{-0.5f, -1.0f}, {1.0f, 0.0f, 0.0f}},
+        {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+        {{-1.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+        {{-1.0f, -1.0f}, {1.0f, 0.0f, 0.0f}}
     };
 
     primativeShapesPipeline.uiComponentsMap[0] = {
@@ -779,6 +825,21 @@ void loadInitialMeshData(VulkanApplication& app, uint32_t delta)
     };
 
     memcpy(primativeShapesIndicesPointer, drawIndices.data(), drawIndices.size() * sizeof(uint16_t));
+
+    app.entitySystem.verticesComponent[app.entitySystem.nextEntity] =
+    {
+        vconfig::PIPELINE_MEMORY_SIZE / 2,
+        static_cast<uint16_t>(simpleShapesVertices.size()),
+        sizeof(BasicVertex)
+    };
+
+    assert(simpleShapesVertices.size() == 4);
+
+    app.entitySystem.numberVerticesComponents++;
+    app.entitySystem.nextEntity++;
+
+    app.entitySystem.exampleTimeUpdateList[0] = app.entitySystem.nextEntity - 1;
+    app.entitySystem.exampleTimeUpdateListSize++;
 
     primativeShapesPipeline.numVertices = static_cast<uint32_t>(simpleShapesVertices.size());
     primativeShapesPipeline.numIndices = static_cast<uint32_t>(drawIndices.size());
@@ -904,6 +965,9 @@ VulkanApplication setupApplication()
 
     vkMapMemory(app.device, app.verticesMemory, 0, vconfig::PIPELINE_MEMORY_SIZE, 0, reinterpret_cast<void**>(&app.mappedVerticesMemory));
     vkMapMemory(app.device, app.indicesMemory, 0, vconfig::PIPELINE_MEMORY_SIZE, 0, reinterpret_cast<void**>(&app.mappedIndicesMemory));
+
+    app.entitySystem = {};
+    app.entitySystem.verticesComponentBasePtr = app.mappedVerticesMemory;
 
     texturesPipeline.usageMap[static_cast<uint16_t>(MemoryUsageType::VERTEX_BUFFER)] = { 0, vconfig::PIPELINE_MEMORY_SIZE / 2 };
     texturesPipeline.usageMap[static_cast<uint16_t>(MemoryUsageType::INDICES_BUFFER)] = { 0, vconfig::PIPELINE_MEMORY_SIZE / 2 };
