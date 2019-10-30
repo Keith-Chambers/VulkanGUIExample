@@ -27,7 +27,8 @@ void recreateSwapChain(VulkanApplication& app);
 void drawFrame(VulkanApplication& app);
 void mainLoop(VulkanApplication& app);
 
-void loopLogic(VulkanApplication& app, uint32_t delta);
+void loopLogic(VulkanApplication& app, std::chrono::milliseconds delta);
+void loadInitialMeshData(VulkanApplication& app, uint32_t delta);
 
 void createVertexBuffer(    const VkDevice device,
                             const VkPhysicalDevice physicalDevice,
