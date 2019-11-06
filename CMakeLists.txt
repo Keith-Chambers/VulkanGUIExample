@@ -15,6 +15,8 @@ add_executable(
     vulkanhelper.cpp
     text.cpp
     config.cpp
+    input.cpp
+    entity.cpp
 )
 
 # target_compile_options(${PROJECT_NAME} PRIVATE -pg)

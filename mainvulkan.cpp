@@ -334,8 +334,6 @@ void mainLoop(VulkanApplication& app)
 
     std::chrono::duration<long, std::milli> frameLength;
 
-//    loopLogic(app, framesPerSec);
-
     while(!glfwWindowShouldClose(app.window))
     {
         frameStart = std::chrono::time_point_cast<std::chrono::duration<long, std::milli>>( std::chrono::steady_clock::now() );
@@ -361,7 +359,7 @@ void mainLoop(VulkanApplication& app)
         frameLength = frameEnd - frameStart;
 
         if(frameLength >= msPerFrame) {
-            printf("No sleep this frame\n");
+            printf("No sleep this frame :(\n");
             continue;
         }
 
@@ -492,41 +490,19 @@ static void framebufferResizeCallback(GLFWwindow* window, int width, int height)
     framebufferResized = true;
 }
 
-/*
-    Each UI component can go through N amount of time dependent transformations.
-    Ideally, you want to do all transformations for each set of vertices together
-
-    This would sugest the following data layout
-
-    For each UI component, define all the transforms which apply.
-    So it's more like a transform subscribes to a set of vertices than the other way around
-
-    You can use bits for this
-*/
-
-/*
-    Reusing a predefined address vs using pointers?
-
-    I guess the former doesn't require the instanciation of a pointer.
-    The address would be hardcoded into the function.
-
-    Very assembly like
-    Maybe setup a seperate stack..
- */
-
-
 void onTimeUpdate(VulkanApplication& app, uint32_t delta)
 {
     //    VulkanApplicationPipeline& texturesPipeline = app.pipelines[PipelineType::Texture];
     VulkanApplicationPipeline& primativeShapesPipeline = app.pipelines[PipelineType::PrimativeShapes];
 
-    updateAddVertexPositions(reinterpret_cast<glm::vec2 *>(primativeShapesPipeline.pipelineMappedMemory),
-                             primativeShapesPipeline.numVertices,
-                             primativeShapesPipeline.vertexStride,
-                             static_cast<float>(delta) / 50.0f,
-                             0);
+    updateAddVertexPositions(   reinterpret_cast<glm::vec2 *>(primativeShapesPipeline.pipelineMappedMemory),
+                                primativeShapesPipeline.numVertices,
+                                primativeShapesPipeline.vertexStride,
+                                static_cast<float>(delta) / 50.0f,
+                                0 );
 }
 
+// TODO: Remove
 void onTimeUpdateExperimental(VulkanApplication& app, uint32_t delta)
 {
     for(uint16_t i = 0; i < app.entitySystem.exampleTimeUpdateListSize; i++) {
@@ -535,130 +511,16 @@ void onTimeUpdateExperimental(VulkanApplication& app, uint32_t delta)
     }
 }
 
+void doPerFrameOperations(VulkanApplication& app)
+{
+    for(uint16_t i = 0; i < app.numPerFrameOperations; i++) {
+        handleOperation(app, app.perFrameOperationIndices[i]);
+    }
+}
+
 void loopLogic(VulkanApplication& app, std::chrono::milliseconds delta)
 {
-    onTimeUpdateExperimental(app, 0);
-
-//    int width = 0, height = 0;
-
-//    while(width == 0 || height == 0)
-//    {
-//        glfwGetFramebufferSize(app.window, &width, &height);
-//    }
-
-//    if(width != currentWindowWidth || height != currentWindowHeight)
-//    {
-//        updatedFrameWidthRatio = static_cast<double>(width) / currentWindowWidth;
-//        updatedFrameHeightRatio = static_cast<double>(height) / currentWindowHeight;
-
-//        for(uint8_t i = 0; i < PipelineType::SIZE; i++)
-//        {
-//            VulkanApplicationPipeline& pipeline = app.pipelines[static_cast<PipelineType>(i)];
-//            updateMultVertexPositions(  reinterpret_cast<glm::vec2 *>(pipeline.pipelineMappedMemory),
-//                                        pipeline.numVertices,
-//                                        pipeline.vertexStride,
-//                                        static_cast<float>(updatedFrameWidthRatio),
-//                                        static_cast<float>(updatedFrameHeightRatio));
-//        }
-//    }
-
-//    for(uint8_t i = 0; i < PipelineType::SIZE; i++)
-//    {
-//        VulkanApplicationPipeline& pipeline = app.pipelines[static_cast<PipelineType>(i)];
-
-//    }
-
-//    updatedFrameWidthRatio = static_cast<double>(width) / currentWindowWidth;
-//    updatedFrameHeightRatio = static_cast<double>(height) / currentWindowHeight;
-
-//    VulkanApplicationPipeline& texturesPipeline = app.pipelines[PipelineType::Texture];
-//    VulkanApplicationPipeline& primativeShapesPipeline = app.pipelines[PipelineType::PrimativeShapes];
-
-//    texturesPipeline.vertexStride = sizeof(Vertex);
-
-//    std::string otherText = "How are you doing today? I hope you are doing well!";
-
-//    uint16_t requiredVertices = static_cast<uint16_t>(otherText.size()) * VERTICES_PER_SQUARE;
-//    uint16_t requiredIndices = static_cast<uint16_t>(otherText.size()) * INDICES_PER_SQUARE;
-
-//    texturesPipeline.numVertices = requiredVertices;
-
-//    Vertex * vertexPointer = reinterpret_cast<Vertex*>(texturesPipeline.pipelineMappedMemory + texturesPipeline.usageMap[static_cast<uint16_t>(MemoryUsageType::VERTEX_BUFFER)].offset);
-//    uint16_t * indicesPointer = reinterpret_cast<uint16_t*>(texturesPipeline.pipelineMappedMemory + texturesPipeline.usageMap[static_cast<uint16_t>(MemoryUsageType::INDICES_BUFFER)].offset);
-
-//    // TODO: generateTextMeshes needs to be split up so that I can update just the vertex data
-//    generateTextMeshes(indicesPointer, &vertexPointer->pos, sizeof(Vertex), 0, app.fontBitmap, &vertexPointer->texCoord, texturesPipeline.vertexStride, otherText, 150, 25);
-
-//    texturesPipeline.uiComponentsMap[0] = {
-//        UIType::TEXT,
-//        GraphicsUpdateDependency::STATIC,
-//        0,
-//        0,
-//        requiredVertices,
-//        requiredIndices
-//    };
-
-//    texturesPipeline.numIndices = requiredIndices;
-
-//    std::string moreText = "Im doing pretty good indeed";
-
-//    generateTextMeshes( indicesPointer + requiredIndices,
-//                        &(vertexPointer + requiredVertices)->pos,
-//                        sizeof(Vertex),
-//                        requiredVertices,
-//                        app.fontBitmap,
-//                        &(vertexPointer + requiredVertices)->texCoord,
-//                        texturesPipeline.vertexStride,
-//                        moreText, 150, 250);
-
-//    texturesPipeline.numVertices += moreText.size() * VERTICES_PER_SQUARE;
-//    texturesPipeline.numIndices += moreText.size() * INDICES_PER_SQUARE;
-
-//    texturesPipeline.uiComponentsMap[1] = {
-//        UIType::TEXT,
-//        GraphicsUpdateDependency::STATIC,
-//        requiredVertices,
-//        requiredIndices,
-//        static_cast<uint16_t>(moreText.size() * VERTICES_PER_SQUARE),
-//        static_cast<uint16_t>(moreText.size() * INDICES_PER_SQUARE)
-//    };
-
-//    // Second pipeline
-
-//    Vertex * basicVertexPointer = reinterpret_cast<Vertex*>(primativeShapesPipeline.pipelineMappedMemory + primativeShapesPipeline.usageMap[static_cast<uint16_t>(MemoryUsageType::VERTEX_BUFFER)].offset);
-//    uint16_t * primativeShapesIndicesPointer = reinterpret_cast<uint16_t*>(primativeShapesPipeline.pipelineMappedMemory + primativeShapesPipeline.usageMap[static_cast<uint16_t>(MemoryUsageType::INDICES_BUFFER)].offset);
-
-//    // TODO: Remove unnessecary copy from std::vectors
-
-//    float xOffset = static_cast<float>(delta) / 25.0f;
-
-//    std::vector<BasicVertex> simpleShapesVertices = {
-//        {{-0.5f + xOffset, -1.0f}, {1.0f, 0.0f, 0.0f}},
-//        {{-0.5f + xOffset, -0.5f}, {1.0f, 0.0f, 0.0f}},
-//        {{-1.0f + xOffset, -0.5f}, {1.0f, 0.0f, 0.0f}},
-//        {{-1.0f + xOffset, -1.0f}, {1.0f, 0.0f, 0.0f}}
-//    };
-
-//    primativeShapesPipeline.uiComponentsMap[0] = {
-//        UIType::SHAPE,
-//        GraphicsUpdateDependency::ALL,
-//        0,
-//        0,
-//        4,
-//        6
-//    };
-
-//    memcpy(basicVertexPointer, simpleShapesVertices.data(), simpleShapesVertices.size() * sizeof(BasicVertex));
-
-//    std::vector<uint16_t> drawIndices = {
-//        0, 1, 2, 2, 3, 0
-//    };
-
-//    memcpy(primativeShapesIndicesPointer, drawIndices.data(), drawIndices.size() * sizeof(uint16_t));
-
-//    primativeShapesPipeline.numVertices = static_cast<uint32_t>(simpleShapesVertices.size());
-//    primativeShapesPipeline.numIndices = static_cast<uint32_t>(drawIndices.size());
-//    primativeShapesPipeline.vertexStride = sizeof(BasicVertex);
+    doPerFrameOperations(app);
 
     VkClearValue clearColor = { /* .color = */  {  /* .float32 = */  { 1.0f, 1.0f, 1.0f, 1.0f } } };
 
@@ -714,6 +576,17 @@ void loopLogic(VulkanApplication& app, std::chrono::milliseconds delta)
     }
 }
 
+int16_t doublePercentageToInt16(double value) {
+    return static_cast<int16_t>(value * 10000.0);
+}
+
+double int16PercentageToDouble(int16_t value) {
+    return value / 10000.0;
+}
+
+float int16PercentageToFloat(int16_t value) {
+    return value / 10000.0f;
+}
 
 void loadInitialMeshData(VulkanApplication& app, uint32_t delta)
 {
@@ -761,7 +634,7 @@ void loadInitialMeshData(VulkanApplication& app, uint32_t delta)
 
     texturesPipeline.numIndices = requiredIndices;
 
-    std::string moreText = "Im doing pretty good indeed";
+    std::string moreText = "New text would be pretty nice actually..";
 
     generateTextMeshes( indicesPointer + requiredIndices,
                         &(vertexPointer + requiredVertices)->pos,
@@ -798,9 +671,6 @@ void loadInitialMeshData(VulkanApplication& app, uint32_t delta)
 
     Vertex * basicVertexPointer = reinterpret_cast<Vertex*>(app.mappedVerticesMemory + primativeShapesPipeline.usageMap[static_cast<uint16_t>(MemoryUsageType::VERTEX_BUFFER)].offset);
     uint16_t * primativeShapesIndicesPointer = reinterpret_cast<uint16_t*>(app.mappedIndicesMemory + primativeShapesPipeline.usageMap[static_cast<uint16_t>(MemoryUsageType::INDICES_BUFFER)].offset);
-
-    // TODO: Remove unnessecary copy from std::vectors
-//    float xOffset = static_cast<float>(delta) / 25.0f;
 
     std::vector<BasicVertex> simpleShapesVertices = {
         {{-0.5f, -1.0f}, {1.0f, 0.0f, 0.0f}},
@@ -840,6 +710,44 @@ void loadInitialMeshData(VulkanApplication& app, uint32_t delta)
 
     app.entitySystem.exampleTimeUpdateList[0] = app.entitySystem.nextEntity - 1;
     app.entitySystem.exampleTimeUpdateListSize++;
+
+    RelativeMoveOperation relativeMove = { static_cast<Entity16>(app.entitySystem.nextEntity - 1), doublePercentageToInt16(0.001), doublePercentageToInt16(0.001) };
+    Operation8Union op8;
+    op8.relativeMove = relativeMove;
+
+    app.insertOp8(OPERATION_CODE_RELATIVE_MOVE, OPERATION_FLAGS_PER_FRAME, op8);
+
+    assert((app.opAt(0).flags & OPERATION_FLAGS_SIZE_8) == OPERATION_FLAGS_SIZE_8);
+    assert(app.opAt(0).opCode == OPERATION_CODE_RELATIVE_MOVE);
+
+//    op8.mouseBoundsMove = { /* Bounds Index */ 0, doublePercentageToInt16(0.001), doublePercentageToInt16(0.001) };
+//    app.insertOp8(OPERATION_CODE_APPLY_MOVE_TO_BOUNDS, OPERATION_FLAGS_PER_FRAME, op8);
+
+//    assert((app.opAt(1).flags & OPERATION_FLAGS_SIZE_8) == OPERATION_FLAGS_SIZE_8);
+//    assert(app.opAt(1).opCode == OPERATION_CODE_APPLY_MOVE_TO_BOUNDS);
+
+    Operation4Union op4;
+    op4.operationIndex = 0;
+
+    app.insertOp4(OPERATION_CODE_DEACTIVATE_OP, 0, op4);
+
+//    assert((app.opAt(2).flags & OPERATION_FLAGS_SIZE_4) == OPERATION_FLAGS_SIZE_4);
+//    assert(app.opAt(2).opCode == OPERATION_CODE_DEACTIVATE_OP);
+
+    app.onMouseEventOpBindings.numAreas = 0;
+    app.onMouseEventOpBindings.numBounds = 1;
+
+    app.onMouseEventOpBindings.bounds[0] =
+    {
+        { /* Point*/ { 0, 0 }, 200, 200 },
+        0,
+        0,
+        1,
+        UINT8_MAX,
+        UINT8_MAX,
+        UINT8_MAX,
+        0
+    };
 
     primativeShapesPipeline.numVertices = static_cast<uint32_t>(simpleShapesVertices.size());
     primativeShapesPipeline.numIndices = static_cast<uint32_t>(drawIndices.size());
@@ -899,6 +807,272 @@ void loadInitialMeshData(VulkanApplication& app, uint32_t delta)
     }
 }
 
+uint16_t unnormalize(double percentage, double max)
+{
+    percentage += 1.0;
+    percentage /= 2;
+
+    return static_cast<uint16_t>(max * percentage);
+}
+
+static void handleOperation4(VulkanApplication& app, Operation4& operation)
+{
+    switch(operation.opCode)
+    {
+        case OPERATION_CODE_DEACTIVATE_OP:
+        {
+            for(uint16_t i = 0; i < app.numPerFrameOperations; i++) {
+                if(app.perFrameOperationIndices[i] == operation.opData.operationIndex) {
+                    // TODO: Hack, do proper removal of array element after testing
+                    app.numPerFrameOperations--;
+                    app.opAt(operation.opData.operationIndex).flags ^= OPERATION_FLAGS_ACTIVE;
+                }
+            }
+
+            break;
+        }
+    }
+}
+
+static void handleOperation8(VulkanApplication& app, Operation8& operation)
+{
+    switch(operation.opCode)
+    {
+        case OPERATION_CODE_RELATIVE_MOVE: {
+
+            RelativeMoveOperation& relativeMove = operation.opData.relativeMove;
+            RelativeDataLocation& verticesTarget = app.entitySystem.verticesComponent[relativeMove.targetEntity];
+            updateAddVertexPositions(   reinterpret_cast<glm::vec2*>(app.entitySystem.verticesComponentBasePtr + verticesTarget.offsetBytes),
+                                        verticesTarget.spanElements,
+                                        verticesTarget.strideBytes,
+                                        int16PercentageToFloat(relativeMove.addX), int16PercentageToFloat(relativeMove.addY));
+
+            break;
+        }
+        case OPERATION_CODE_ABSOLUTE_MOVE:
+            assert(false && "OPERATION_CODE_ABSOLUTE_MOVE not implemented");
+            break;
+        case OPERATION_CODE_APPLY_MOVE_TO_BOUNDS:
+        {
+//            printf("Apply move to bounds\n");
+            const SimpleMouseBoundsMoveOperation& boundsMove = operation.opData.mouseBoundsMove;
+            Rect& targetBounds = app.onMouseEventOpBindings.bounds[boundsMove.boundsIndex].boundsArea;
+            targetBounds.point.x +=  boundsMove.addX;   // TODO: You need to decide whether the main unit is going to be pixels or screen percentages within the loop
+            targetBounds.point.y += boundsMove.addY;
+            break;
+        }
+        default:
+            assert(false && "invalid operation opCode [OPCODE_OFFSET_SIZE_8]");
+    }
+}
+
+static void handleOperation(VulkanApplication& app, uint16_t operationIndex)
+{
+    Operation2& operation = app.opAt(operationIndex);
+
+    if((operation.flags & OPERATION_FLAGS_PER_FRAME) && !(operation.flags & OPERATION_FLAGS_ACTIVE))
+    {
+        app.perFrameOperationIndices[ app.numPerFrameOperations ] = operationIndex;
+        app.numPerFrameOperations++;
+        operation.flags |= OPERATION_FLAGS_ACTIVE;
+        return;
+    }
+
+    switch(operation.flags & 0b11000000)
+    {
+        case OPERATION_FLAGS_SIZE_2: { // TODO: Probably 'deprecate' Operation2
+
+            break;
+        }
+        case OPERATION_FLAGS_SIZE_4: {
+            Operation4& operation4 = *reinterpret_cast<Operation4*>(&operation);
+            handleOperation4( app, operation4 );
+            break;
+        }
+        case OPERATION_FLAGS_SIZE_8: {
+            Operation8& operation8 = *reinterpret_cast<Operation8*>(&operation);
+            handleOperation8(app, operation8);
+
+            break;
+        }
+        case OPERATION_FLAGS_SIZE_16: {
+            Operation16& operation16 = *reinterpret_cast<Operation16*>(&operation);
+
+            break;
+        }
+        default: {
+            printf("Invalid operation size\n");
+        }
+    }
+}
+
+bool isActiveBoundsIndex(VulkanApplication& app, uint16_t boundsIndex)
+{
+    for(uint16_t i = 0; i < app.numActiveBounds; i++)
+    {
+        if(app.activeBoundsIndices[i] == boundsIndex) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool removeArrayIndex(uint16_t *array, uint16_t arraySize, uint16_t arrayIndex)
+{
+    if(arrayIndex == arraySize - 1) {
+        return true;
+    }
+
+    for(uint16_t i = arraySize - 1; i > arrayIndex; i--) {
+        array[i - 1] = array[i];
+    }
+
+    return true;
+}
+
+bool removeArrayValue(uint16_t *array, uint16_t arraySize, uint16_t arrayValue)
+{
+
+    uint16_t foundIndex = arraySize;
+
+    for(uint16_t i = 0; i < arraySize; i++) {
+        if(array[i] == arrayValue) {
+            foundIndex = i;
+            break;
+        }
+    }
+
+    if(foundIndex == arraySize) {
+        return false;
+    }
+
+    if(foundIndex == arraySize - 1) {
+        return true;
+    }
+
+    for(uint16_t i = arraySize - 1; i > foundIndex; i--) {
+        array[i - 1] = array[i];
+    }
+
+    return true;
+}
+
+static void onCursorPosChanged(GLFWwindow * window, double xPos, double yPos)
+{
+    VulkanApplication& app = *reinterpret_cast<VulkanApplication*>( glfwGetWindowUserPointer(window) );
+
+    uint16_t xPixelPos = static_cast<uint16_t>(xPos);
+    uint16_t yPixelPos = static_cast<uint16_t>(yPos);
+
+    for(uint16_t i = 0; i < app.numActiveBounds; i++)
+    {
+        const MouseBounds& mouseBounds = app.onMouseEventOpBindings.bounds[ app.activeBoundsIndices[i] ];
+        const Rect& boundsArea = mouseBounds.boundsArea;
+
+        if( boundsArea.point.x > xPixelPos ||
+            boundsArea.point.x + boundsArea.width < xPixelPos ||
+            boundsArea.point.y > yPixelPos ||
+            boundsArea.point.y + boundsArea.height < yPixelPos)
+        {
+            printf("left active area\n");
+
+            removeArrayIndex(app.activeBoundsIndices, 10, i);
+            app.numActiveBounds--;
+
+            // TODO: If this works, remove all the function calls and add indices to a temp array and call in a loop
+            switch(mouseBounds.flags & MOUSE_BOUNDS_FLAGS_NUM_ON_HOVER_ENTER_MASK)
+            {
+                case MOUSE_BOUNDS_FLAGS_3_ON_HOVER_ENTER:
+                    switch(mouseBounds.flags & MOUSE_BOUNDS_FLAGS_NUM_ON_HOVER_EXIT_MASK)
+                    {
+                        case MOUSE_BOUNDS_FLAGS_3_ON_HOVER_EXIT:
+                            handleOperation(app, mouseBounds.numSubAreas);
+                        [[fallthrough]];
+                        case MOUSE_BOUNDS_FLAGS_2_ON_HOVER_EXIT:
+                            handleOperation(app, mouseBounds.onMClickOperation);
+                        [[fallthrough]];
+                        case MOUSE_BOUNDS_FLAGS_1_ON_HOVER_EXIT:
+                            handleOperation(app, mouseBounds.onRClickOperation);
+                    }
+                    break;
+                case MOUSE_BOUNDS_FLAGS_2_ON_HOVER_ENTER:
+                    switch(mouseBounds.flags & MOUSE_BOUNDS_FLAGS_NUM_ON_HOVER_EXIT_MASK)
+                    {
+                        case MOUSE_BOUNDS_FLAGS_3_ON_HOVER_EXIT:
+                            handleOperation(app, mouseBounds.onMClickOperation);
+                        [[fallthrough]];
+                        case MOUSE_BOUNDS_FLAGS_2_ON_HOVER_EXIT:
+                            handleOperation(app, mouseBounds.onRClickOperation);
+                        [[fallthrough]];
+                        case MOUSE_BOUNDS_FLAGS_1_ON_HOVER_EXIT:
+                            handleOperation(app, mouseBounds.onLClickOperation);
+                    }
+                    break;
+                case MOUSE_BOUNDS_FLAGS_1_ON_HOVER_ENTER:
+                    switch(mouseBounds.flags & MOUSE_BOUNDS_FLAGS_NUM_ON_HOVER_EXIT_MASK)
+                    {
+                        case MOUSE_BOUNDS_FLAGS_3_ON_HOVER_EXIT:
+                            handleOperation(app, mouseBounds.onRClickOperation);
+                        [[fallthrough]];
+                        case MOUSE_BOUNDS_FLAGS_2_ON_HOVER_EXIT:
+                            handleOperation(app, mouseBounds.onLClickOperation);
+                        [[fallthrough]];
+                        case MOUSE_BOUNDS_FLAGS_1_ON_HOVER_EXIT:
+                            handleOperation(app, mouseBounds.onHoverExitOperation);
+                    }
+                    break;
+                default:
+                    assert(false && "Must be an ON_HOVER_ENTER for an ON_HOVER_EXIT");
+            }
+
+            assert(app.numActiveBounds == 0);
+        }
+    }
+
+    for(uint16_t i = 0; i < app.onMouseEventOpBindings.numBounds; i++)
+    {
+        const MouseBounds& mouseBounds = app.onMouseEventOpBindings.bounds[i];
+        const Rect& boundsArea = mouseBounds.boundsArea;
+
+        if((mouseBounds.flags & MOUSE_BOUNDS_FLAGS_NUM_ON_HOVER_ENTER_MASK) == MOUSE_BOUNDS_FLAGS_0_ON_HOVER_ENTER) {
+            continue;
+        }
+
+        if( (!isActiveBoundsIndex(app, i)) &&
+            mouseBounds.onHoverEnterOperation != UINT8_MAX &&
+            xPixelPos >= boundsArea.point.x &&
+            xPixelPos <= (boundsArea.point.x + boundsArea.width) &&
+            yPixelPos >= boundsArea.point.y &&
+            yPixelPos <= (boundsArea.point.y + boundsArea.height))
+        {
+            printf("Entered bounds\n");
+
+            if((mouseBounds.flags & MOUSE_BOUNDS_FLAGS_NUM_ON_HOVER_EXIT_MASK) != MOUSE_BOUNDS_FLAGS_0_ON_HOVER_EXIT)
+            {
+                app.activeBoundsIndices[ app.numActiveBounds ] = i;
+                app.numActiveBounds++;
+            }
+
+            if(mouseBounds.flags == 0) {
+                handleOperation(app, app.onMouseEventOpBindings.bounds[i].onHoverEnterOperation);
+                continue;
+            }
+
+            if((mouseBounds.flags & MOUSE_BOUNDS_FLAGS_NUM_ON_HOVER_ENTER_MASK) == MOUSE_BOUNDS_FLAGS_2_ON_HOVER_ENTER) {
+                handleOperation(app, app.onMouseEventOpBindings.bounds[i].onHoverExitOperation);
+            }
+
+            if((mouseBounds.flags & MOUSE_BOUNDS_FLAGS_NUM_ON_HOVER_ENTER_MASK) == MOUSE_BOUNDS_FLAGS_3_ON_HOVER_ENTER) {
+                handleOperation(app, app.onMouseEventOpBindings.bounds[i].onHoverExitOperation);
+                handleOperation(app, app.onMouseEventOpBindings.bounds[i].onLClickOperation);
+            }
+
+            assert(app.numActiveBounds == 1);
+        }
+    }
+}
+
 VulkanApplication setupApplication()
 {
     setvbuf(stdout, nullptr, _IOLBF, 0);
@@ -906,6 +1080,9 @@ VulkanApplication setupApplication()
     VulkanApplication app;
 
     initializeVulkan(app);
+
+    glfwSetWindowUserPointer(app.window, reinterpret_cast<void *>(&app));
+    glfwSetCursorPosCallback(app.window, onCursorPosChanged);
 
     glfwSetFramebufferSizeCallback(app.window, framebufferResizeCallback);
 

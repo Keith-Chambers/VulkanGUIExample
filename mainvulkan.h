@@ -21,6 +21,7 @@
 #include "typesvulkan.h"
 #include "text.h"
 #include "config.h"
+#include "input.h"
 
 void recreateSwapChain(VulkanApplication& app);
 
@@ -29,6 +30,12 @@ void mainLoop(VulkanApplication& app);
 
 void loopLogic(VulkanApplication& app, std::chrono::milliseconds delta);
 void loadInitialMeshData(VulkanApplication& app, uint32_t delta);
+
+int16_t doublePercentageToInt16(double value);
+float int16PercentageToFloat(int16_t value);
+double int16PercentageToDouble(int16_t value);
+
+static void handleOperation(VulkanApplication& app, uint16_t operationIndex);
 
 void createVertexBuffer(    const VkDevice device,
                             const VkPhysicalDevice physicalDevice,
