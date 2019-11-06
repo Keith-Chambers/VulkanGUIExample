@@ -711,7 +711,7 @@ void loadInitialMeshData(VulkanApplication& app, uint32_t delta)
     app.entitySystem.exampleTimeUpdateList[0] = app.entitySystem.nextEntity - 1;
     app.entitySystem.exampleTimeUpdateListSize++;
 
-    RelativeMoveOperation relativeMove = { static_cast<Entity16>(app.entitySystem.nextEntity - 1), doublePercentageToInt16(0.001), doublePercentageToInt16(0.001) };
+    RelativeMoveOperation relativeMove = { static_cast<Entity16>(app.entitySystem.nextEntity - 1), {30}, {30} };
     Operation8Union op8;
     op8.relativeMove = relativeMove;
 
@@ -720,8 +720,8 @@ void loadInitialMeshData(VulkanApplication& app, uint32_t delta)
     assert((app.opAt(0).flags & OPERATION_FLAGS_SIZE_8) == OPERATION_FLAGS_SIZE_8);
     assert(app.opAt(0).opCode == OPERATION_CODE_RELATIVE_MOVE);
 
-//    op8.mouseBoundsMove = { /* Bounds Index */ 0, doublePercentageToInt16(0.001), doublePercentageToInt16(0.001) };
-//    app.insertOp8(OPERATION_CODE_APPLY_MOVE_TO_BOUNDS, OPERATION_FLAGS_PER_FRAME, op8);
+    op8.mouseBoundsMove = { /* Bounds Index */ 0, {30}, {30} };
+    app.insertOp8(OPERATION_CODE_APPLY_MOVE_TO_BOUNDS, OPERATION_FLAGS_PER_FRAME, op8);
 
 //    assert((app.opAt(1).flags & OPERATION_FLAGS_SIZE_8) == OPERATION_FLAGS_SIZE_8);
 //    assert(app.opAt(1).opCode == OPERATION_CODE_APPLY_MOVE_TO_BOUNDS);
@@ -729,6 +729,9 @@ void loadInitialMeshData(VulkanApplication& app, uint32_t delta)
     Operation4Union op4;
     op4.operationIndex = 0;
 
+    app.insertOp4(OPERATION_CODE_DEACTIVATE_OP, 0, op4);
+
+    op4.operationIndex = 1;
     app.insertOp4(OPERATION_CODE_DEACTIVATE_OP, 0, op4);
 
 //    assert((app.opAt(2).flags & OPERATION_FLAGS_SIZE_4) == OPERATION_FLAGS_SIZE_4);
@@ -739,12 +742,12 @@ void loadInitialMeshData(VulkanApplication& app, uint32_t delta)
 
     app.onMouseEventOpBindings.bounds[0] =
     {
-        { /* Point*/ { 0, 0 }, 200, 200 },
-        0,
+        { /* Point*/ { { NORMFLOAT_MIN }, { NORMFLOAT_MIN } }, { 5000 }, { 5000 } },
+        MOUSE_BOUNDS_FLAGS_2_ON_HOVER_ENTER | MOUSE_BOUNDS_FLAGS_2_ON_HOVER_EXIT,
         0,
         1,
-        UINT8_MAX,
-        UINT8_MAX,
+        2,
+        3,
         UINT8_MAX,
         0
     };
@@ -824,6 +827,8 @@ static void handleOperation4(VulkanApplication& app, Operation4& operation)
             for(uint16_t i = 0; i < app.numPerFrameOperations; i++) {
                 if(app.perFrameOperationIndices[i] == operation.opData.operationIndex) {
                     // TODO: Hack, do proper removal of array element after testing
+//                    printf("Removing active index -> %u\n", i);
+                    removeArrayIndex(app.perFrameOperationIndices, app.numPerFrameOperations, i);
                     app.numPerFrameOperations--;
                     app.opAt(operation.opData.operationIndex).flags ^= OPERATION_FLAGS_ACTIVE;
                 }
@@ -839,13 +844,16 @@ static void handleOperation8(VulkanApplication& app, Operation8& operation)
     switch(operation.opCode)
     {
         case OPERATION_CODE_RELATIVE_MOVE: {
-
+//            printf("move op\n");
             RelativeMoveOperation& relativeMove = operation.opData.relativeMove;
             RelativeDataLocation& verticesTarget = app.entitySystem.verticesComponent[relativeMove.targetEntity];
             updateAddVertexPositions(   reinterpret_cast<glm::vec2*>(app.entitySystem.verticesComponentBasePtr + verticesTarget.offsetBytes),
                                         verticesTarget.spanElements,
                                         verticesTarget.strideBytes,
-                                        int16PercentageToFloat(relativeMove.addX), int16PercentageToFloat(relativeMove.addY));
+                                        relativeMove.addX.get(), relativeMove.addY.get());
+
+//            printf("X -> %f\n", relativeMove.addX.get());
+//            printf("Y -> %f\n", relativeMove.addY.get());
 
             break;
         }
@@ -854,11 +862,16 @@ static void handleOperation8(VulkanApplication& app, Operation8& operation)
             break;
         case OPERATION_CODE_APPLY_MOVE_TO_BOUNDS:
         {
-//            printf("Apply move to bounds\n");
+
             const SimpleMouseBoundsMoveOperation& boundsMove = operation.opData.mouseBoundsMove;
-            Rect& targetBounds = app.onMouseEventOpBindings.bounds[boundsMove.boundsIndex].boundsArea;
-            targetBounds.point.x +=  boundsMove.addX;   // TODO: You need to decide whether the main unit is going to be pixels or screen percentages within the loop
-            targetBounds.point.y += boundsMove.addY;
+            NormalizedRect& targetBounds = app.onMouseEventOpBindings.bounds[boundsMove.boundsIndex].boundsArea;
+//            assert(boundsMove.addX == 10);
+//            assert(boundsMove.addY == 10);
+            targetBounds.topLeftPoint.x.addTo(boundsMove.addX);   // TODO: You need to decide whether the main unit is going to be pixels or screen percentages within the loop
+            targetBounds.topLeftPoint.y.addTo(boundsMove.addY);
+
+//            printf("Bounds X -> %f\n", targetBounds.topLeftPoint.x.get());
+//            printf("Bounds Y -> %f\n", targetBounds.topLeftPoint.y.get());
             break;
         }
         default:
@@ -960,20 +973,34 @@ bool removeArrayValue(uint16_t *array, uint16_t arraySize, uint16_t arrayValue)
 
 static void onCursorPosChanged(GLFWwindow * window, double xPos, double yPos)
 {
+//    assert(false && "onCursorPosChanged disabled\n");
+
     VulkanApplication& app = *reinterpret_cast<VulkanApplication*>( glfwGetWindowUserPointer(window) );
 
-    uint16_t xPixelPos = static_cast<uint16_t>(xPos);
-    uint16_t yPixelPos = static_cast<uint16_t>(yPos);
+//    uint16_t xPixelPos = static_cast<uint16_t>(xPos);
+//    uint16_t yPixelPos = static_cast<uint16_t>(yPos);
+
+    xPos *= 2;
+    yPos *= 2;
+
+    xPos -= 800;
+    yPos -= 600;
+
+    xPos /= 800;
+    yPos /= 600;
+
+//    printf("X pos -> %f\n", xPos);
+//    printf("Y pos -> %f\n", yPos);
 
     for(uint16_t i = 0; i < app.numActiveBounds; i++)
     {
         const MouseBounds& mouseBounds = app.onMouseEventOpBindings.bounds[ app.activeBoundsIndices[i] ];
-        const Rect& boundsArea = mouseBounds.boundsArea;
+        const NormalizedRect& boundsArea = mouseBounds.boundsArea;
 
-        if( boundsArea.point.x > xPixelPos ||
-            boundsArea.point.x + boundsArea.width < xPixelPos ||
-            boundsArea.point.y > yPixelPos ||
-            boundsArea.point.y + boundsArea.height < yPixelPos)
+        if( boundsArea.topLeftPoint.x.get() > xPos ||
+            normfloat16::add(boundsArea.topLeftPoint.x, boundsArea.width) < xPos ||
+            boundsArea.topLeftPoint.y.get() > yPos ||
+            normfloat16::add(boundsArea.topLeftPoint.y, boundsArea.height) < yPos)
         {
             printf("left active area\n");
 
@@ -1033,7 +1060,14 @@ static void onCursorPosChanged(GLFWwindow * window, double xPos, double yPos)
     for(uint16_t i = 0; i < app.onMouseEventOpBindings.numBounds; i++)
     {
         const MouseBounds& mouseBounds = app.onMouseEventOpBindings.bounds[i];
-        const Rect& boundsArea = mouseBounds.boundsArea;
+        const NormalizedRect& boundsArea = mouseBounds.boundsArea;
+
+//        printf("TL X %f\n", boundsArea.topLeftPoint.x.get());
+//        printf("TL Y %f\n", boundsArea.topLeftPoint.y.get());
+//        printf("Width %f\n", boundsArea.width.get());
+//        printf("Height %f\n", boundsArea.height.get());
+//        printf("TL X + Width %f\n", normfloat16::add(boundsArea.topLeftPoint.x, boundsArea.width));
+//        printf("TL Y + Height %f\n", normfloat16::add(boundsArea.topLeftPoint.y, boundsArea.height));
 
         if((mouseBounds.flags & MOUSE_BOUNDS_FLAGS_NUM_ON_HOVER_ENTER_MASK) == MOUSE_BOUNDS_FLAGS_0_ON_HOVER_ENTER) {
             continue;
@@ -1041,10 +1075,10 @@ static void onCursorPosChanged(GLFWwindow * window, double xPos, double yPos)
 
         if( (!isActiveBoundsIndex(app, i)) &&
             mouseBounds.onHoverEnterOperation != UINT8_MAX &&
-            xPixelPos >= boundsArea.point.x &&
-            xPixelPos <= (boundsArea.point.x + boundsArea.width) &&
-            yPixelPos >= boundsArea.point.y &&
-            yPixelPos <= (boundsArea.point.y + boundsArea.height))
+            xPos >= boundsArea.topLeftPoint.x.get() &&
+            xPos <= normfloat16::add(boundsArea.topLeftPoint.x, boundsArea.width) &&
+            yPos >= boundsArea.topLeftPoint.y.get() &&
+            yPos <= normfloat16::add(boundsArea.topLeftPoint.y, boundsArea.height))
         {
             printf("Entered bounds\n");
 
@@ -1059,11 +1093,14 @@ static void onCursorPosChanged(GLFWwindow * window, double xPos, double yPos)
                 continue;
             }
 
+            // TODO: this..
             if((mouseBounds.flags & MOUSE_BOUNDS_FLAGS_NUM_ON_HOVER_ENTER_MASK) == MOUSE_BOUNDS_FLAGS_2_ON_HOVER_ENTER) {
+                handleOperation(app, app.onMouseEventOpBindings.bounds[i].onHoverEnterOperation);
                 handleOperation(app, app.onMouseEventOpBindings.bounds[i].onHoverExitOperation);
             }
 
             if((mouseBounds.flags & MOUSE_BOUNDS_FLAGS_NUM_ON_HOVER_ENTER_MASK) == MOUSE_BOUNDS_FLAGS_3_ON_HOVER_ENTER) {
+                handleOperation(app, app.onMouseEventOpBindings.bounds[i].onHoverEnterOperation);
                 handleOperation(app, app.onMouseEventOpBindings.bounds[i].onHoverExitOperation);
                 handleOperation(app, app.onMouseEventOpBindings.bounds[i].onLClickOperation);
             }

@@ -28,6 +28,8 @@ void recreateSwapChain(VulkanApplication& app);
 void drawFrame(VulkanApplication& app);
 void mainLoop(VulkanApplication& app);
 
+bool removeArrayIndex(uint16_t *array, uint16_t arraySize, uint16_t arrayIndex);
+
 void loopLogic(VulkanApplication& app, std::chrono::milliseconds delta);
 void loadInitialMeshData(VulkanApplication& app, uint32_t delta);
 

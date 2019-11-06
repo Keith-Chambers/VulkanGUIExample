@@ -59,10 +59,78 @@ struct FontBitmap
     static bool instanciate_char_bitmap(FontBitmap& font_bitmap, FT_Face& face, const char c);
 };
 
+struct NormFloat16
+{
+    uint16_t data;
+
+    inline void set(double value) {
+        data = static_cast<uint16_t>(value * 10000.0);
+    }
+
+    inline double get() const {
+        return data / 10000.0;
+    }
+
+    inline void addTo(NormFloat16 val) {
+        data += val.data;
+    }
+};
+
+// 4 points of precision
+// range [-1. 1]
+struct SNormFloat16
+{
+    int16_t data;
+
+    inline void set(double value) {
+        data = static_cast<int16_t>(value * 10000.0);
+    }
+
+    inline double get() const {
+        return data / 10000.0;
+    }
+
+    inline void addTo(NormFloat16 val) {
+        data += static_cast<int16_t>(val.data);
+    }
+
+    inline void addTo(SNormFloat16 val) {
+        data += val.data;
+    }
+};
+
+#define NORMFLOAT_MAX   10000
+#define NORMFLOAT_MIN  -10000
+
+namespace normfloat16 {
+    inline double add(SNormFloat16 a, SNormFloat16 b) {
+        return a.get() + b.get();
+    }
+
+    inline double add(SNormFloat16 a, NormFloat16 b) {
+        return a.get() + b.get();
+    }
+}
+
+static_assert(sizeof(SNormFloat16) == 2);
+
 struct Point
 {
     uint16_t x;
     uint16_t y;
+};
+
+struct NormalizedPoint
+{
+    SNormFloat16 x;
+    SNormFloat16 y;
+};
+
+struct NormalizedRect
+{
+    NormalizedPoint topLeftPoint;
+    NormFloat16 width;
+    NormFloat16 height;
 };
 
 struct Rect
@@ -70,6 +138,14 @@ struct Rect
     Point point;
     uint16_t height;
     uint16_t width;
+};
+
+struct NormalizedArc
+{
+    NormFloat16 radius;
+    NormalizedPoint center;
+    uint8_t startAngle; // Even
+    uint8_t endAngle;   // Even // Until you can replace with Zig types
 };
 
 struct Arc
@@ -82,9 +158,11 @@ struct Arc
 
 union AreaShape
 {
-    Rect r;
-    Arc a;
+    NormalizedRect r;
+    NormalizedArc a;
 };
+
+static_assert(sizeof(AreaShape) == 8);
 
 struct Area
 {
@@ -156,7 +234,7 @@ struct Area
 
 struct MouseBounds
 {
-    Rect boundsArea;
+    NormalizedRect boundsArea;
     uint16_t flags;
     uint8_t onHoverEnterOperation;
     uint8_t onHoverExitOperation;
@@ -202,8 +280,8 @@ struct ChangeColorOperation
 struct RelativeMoveOperation
 {
     Entity16 targetEntity;
-    int16_t addX;
-    int16_t addY;
+    SNormFloat16 addX;
+    SNormFloat16 addY;
 };
 
 struct AnimatedMoveOperation
@@ -301,8 +379,8 @@ struct Operation2
 struct SimpleMouseBoundsMoveOperation
 {
     uint16_t boundsIndex;
-    int16_t addX;
-    int16_t addY;
+    SNormFloat16 addX;
+    SNormFloat16 addY;
 };
 
 union Operation4Union
@@ -644,7 +722,7 @@ struct VulkanApplication
 
     EntitySystemHandle entitySystem;
     static const constexpr uint16_t NUM_EVENTS = 40;
-    static const constexpr uint16_t NUM_OPERATIONS = 10;
+    static const constexpr uint16_t NUM_OPERATIONS = 40;
 
     // TODO: Array lengths are hardcoded
 
