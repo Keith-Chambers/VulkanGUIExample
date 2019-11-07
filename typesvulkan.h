@@ -17,6 +17,23 @@
 
 #include "entity.h"
 
+/*  What major things are missing?
+ *
+ *  Framebuffer resizing
+ *  layouts
+ *      specifying % and absolute values
+ *      Even layout types like grid layout
+ *  draw order
+ *  pages (You need to be able to generate page data from a function)
+ *  memory allocator - memory is a complete mess atm
+ *  Much better text
+ *
+ * What would be easy enough to implement
+ *  Buttons
+ *  percentages
+ *
+ */
+
 struct CharBitmap
 {
     uint16_t width;
@@ -647,8 +664,30 @@ struct VulkanApplicationPipeline
     uint32_t pipelineMemorySize;
     // TODO: Create something that overloads the [] operator to take a MemoryUsageType as an index value so static_cast is no longer required
     MemoryUsageMap usageMap[static_cast<uint16_t>(MemoryUsageType::SIZE)];
-    uint32_t numIndices;
-    uint32_t numVertices;
+    uint32_t numIndices = 0;
+    uint32_t numVertices = 0;
+
+    inline uint16_t * writeIndices(uint8_t * mappedIndicesMemory, uint16_t numIndicesToWrite)
+    {
+        uint16_t * result = reinterpret_cast<uint16_t*>(mappedIndicesMemory + usageMap[static_cast<uint16_t>(MemoryUsageType::INDICES_BUFFER)].offset + (numIndices * 2));
+        numIndices += numIndicesToWrite;
+        return result;
+    }
+
+    inline uint16_t * getFreeIndices(uint8_t * mappedIndicesMemory) {
+        return writeIndices(mappedIndicesMemory, 0);
+    }
+
+    inline glm::vec2 * writeVertices(uint8_t * mappedVertexMemory, uint16_t numVerticesToWrite, uint8_t vertexSizeBytes, uint8_t memberOffset)
+    {
+        uint8_t * result = reinterpret_cast<uint8_t*>(mappedVertexMemory + memberOffset + usageMap[static_cast<uint16_t>(MemoryUsageType::VERTEX_BUFFER)].offset + (numVertices * vertexSizeBytes));
+        numVertices += numVerticesToWrite;
+        return reinterpret_cast<glm::vec2 *>(result);
+    }
+
+    inline glm::vec2 * getFreeVertices(uint8_t * mappedVertexMemory, uint8_t vertexSizeBytes, uint8_t memberOffset) {
+        return writeVertices(mappedVertexMemory, 0, vertexSizeBytes, memberOffset);
+    }
 
     VkDeviceMemory pipelineMemory;
     UITypeMeshBinding uiComponentsMap[100];

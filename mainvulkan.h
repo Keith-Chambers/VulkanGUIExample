@@ -1,6 +1,7 @@
 #ifndef MAIN_VULKAN_INCLUDE
 #define MAIN_VULKAN_INCLUDE
 
+//#define NDEBUG
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
@@ -32,6 +33,8 @@ bool removeArrayIndex(uint16_t *array, uint16_t arraySize, uint16_t arrayIndex);
 
 void loopLogic(VulkanApplication& app, std::chrono::milliseconds delta);
 void loadInitialMeshData(VulkanApplication& app, uint32_t delta);
+
+uint32_t drawText(VulkanApplication& app, NormalizedPoint point, std::string& text);
 
 int16_t doublePercentageToInt16(double value);
 float int16PercentageToFloat(int16_t value);

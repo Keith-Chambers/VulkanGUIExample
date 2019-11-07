@@ -4,28 +4,21 @@ static bool mapCharTextureToMesh(FontBitmap& font_bitmap, const char c, glm::vec
 static void printGlyphInformation(FT_GlyphSlot glyph);
 static void createRectMesh(uint16_t * indices, glm::vec2 * vertices, uint16_t vertices_stride_bytes, uint16_t start_vertex_index, float x, float y, float height, float width);
 
-inline double signedNormalizedPixelDistance(int32_t pos1, int32_t pos2, uint32_t globalRangePixels)
-{
+//inline double signedNormalizedPixelDistance(int32_t pos1, int32_t pos2, uint32_t globalRangePixels)
+//{
 
-}
+//}
 
 inline double signedNormalizePixelPosition(uint32_t position_pixels, uint32_t length_pixels)
 {
     assert(position_pixels <= length_pixels);
     assert(length_pixels != 0);
 
-    if(position_pixels > length_pixels) {
-        return 1.0;
-    }
+    double result = static_cast<double>(position_pixels) / length_pixels;
+    result *= 2;
+    result -= 1.0;
 
-    int sign = 1;
-
-    if(position_pixels < length_pixels / 2) {
-        sign = -1;
-        position_pixels = length_pixels - position_pixels;
-    }
-
-    return (static_cast<double>(position_pixels) / length_pixels) * sign;
+    return result;
 }
 
 inline double unsignedNormalizePixelPosition(uint32_t position_pixels, uint32_t length_pixels)
@@ -297,6 +290,13 @@ void updateMultVertexPositions( glm::vec2 * vertices,
     }
 }
 
+/*
+    Coorindate system:
+        Q: If you use a point, where should it be, topleft, bottomLeft, center?
+
+        Probably center would be the most useful tbh.
+*/
+
 void generateTextMeshes(   uint16_t * indices,
                             glm::vec2 * vertices,
                             uint16_t vertices_stride_bytes,
@@ -309,7 +309,7 @@ void generateTextMeshes(   uint16_t * indices,
                             uint16_t start_y)
 {
     float x_pos = static_cast<float>(signedNormalizePixelPosition(start_x, vconfig::INITIAL_WINDOW_WIDTH));
-    float y_pos = static_cast<float>(signedNormalizePixelPosition(start_y + TEXT_LINE_SPACING, vconfig::INITIAL_WINDOW_HEIGHT));
+    float y_pos = static_cast<float>(signedNormalizePixelPosition(start_y, vconfig::INITIAL_WINDOW_HEIGHT));
 
     float norm_line_spacing = static_cast<float>(unsignedNormalizePixelPosition(TEXT_LINE_SPACING, vconfig::INITIAL_WINDOW_HEIGHT));
 
@@ -367,7 +367,7 @@ void generateTextMeshes(   uint16_t * indices,
 //            printf("Kearning between '%c' and '%c' -> %d\n", c, text[current_text_index + 1], relative_kearning_offset);
 //        }
 
-        createRectMesh(indices, vertices, vertices_stride_bytes, start_vertex_index, x_pos, y_pos + (norm_relative_baseline * 1.8) + (norm_line_spacing - face_height), face_height, face_width);
+        createRectMesh(indices, vertices, vertices_stride_bytes, start_vertex_index, x_pos, y_pos + (norm_relative_baseline * 1.8) - face_height, face_height, face_width);
 
         start_vertex_index += 4;
         indices += 6;
@@ -392,5 +392,4 @@ void generateTextMeshes(   uint16_t * indices,
 
         current_text_index++;
     }
-
 }

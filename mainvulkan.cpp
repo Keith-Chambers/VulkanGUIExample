@@ -522,6 +522,8 @@ void loopLogic(VulkanApplication& app, std::chrono::milliseconds delta)
 {
     doPerFrameOperations(app);
 
+//    updateAddVertexPositions(reinterpret_cast<glm::vec2*>(app.mappedVerticesMemory), 24, sizeof(Vertex), 0.001f, 0.001f);
+
     VkClearValue clearColor = { /* .color = */  {  /* .float32 = */  { 1.0f, 1.0f, 1.0f, 1.0f } } };
 
     vkDeviceWaitIdle(app.device);
@@ -588,6 +590,127 @@ float int16PercentageToFloat(int16_t value) {
     return value / 10000.0f;
 }
 
+struct PageSetupState
+{
+    uint16_t currentVerticesIndex;
+    uint16_t currentIndicesIndex;
+    uint8_t currentMouseBoundsIndex;
+};
+
+void button(VulkanApplication& app, glm::vec3 color, std::string& text, NormalizedPoint tlPoint)
+{
+    NormFloat16 height;
+    height.set(0.07);
+
+    NormFloat16 width;
+    width.set(0.2);
+
+    VulkanApplicationPipeline& texturesPipeline = app.pipelines[PipelineType::Texture];
+    VulkanApplicationPipeline& primativeShapesPipeline = app.pipelines[PipelineType::PrimativeShapes];
+
+    std::vector<BasicVertex> simpleShapesVertices = {
+        {{tlPoint.x.get() + width.get(), tlPoint.y.get()},                  {color.r, color.g, color.b}},   // Top right
+        {{tlPoint.x.get() + width.get(), tlPoint.x.get() + height.get()},   {color.r, color.g, color.b}},   // Bottom right
+        {{tlPoint.x.get(), tlPoint.x.get() + height.get()},                 {color.r, color.g, color.b}},   // Bottom left
+        {{tlPoint.x.get(), tlPoint.y.get()},                                {color.r, color.g, color.b}}    // Top left
+    };
+
+    memcpy(primativeShapesPipeline.writeVertices(app.mappedVerticesMemory, VERTICES_PER_SQUARE, sizeof(BasicVertex), offsetof(BasicVertex, pos)),
+           simpleShapesVertices.data(), simpleShapesVertices.size() * sizeof(BasicVertex));
+
+    std::vector<uint16_t> drawIndices = {
+        0, 1, 2, 2, 3, 0
+    };
+
+    memcpy(primativeShapesPipeline.writeIndices(app.mappedIndicesMemory, INDICES_PER_SQUARE), drawIndices.data(), drawIndices.size() * sizeof(uint16_t));
+
+//    NormalizedPoint point;
+//    point.x.set(0.0);
+//    point.y.set(0.0);
+
+    drawText(app, tlPoint, text);
+
+//    uint16_t requiredIndices = static_cast<uint16_t>(text.size() * INDICES_PER_SQUARE);
+//    uint16_t requiredVertices = static_cast<uint16_t>(text.size() * VERTICES_PER_SQUARE);
+
+//    glm::vec2 * startTexCoordPos = texturesPipeline.getFreeVertices(app.mappedVerticesMemory, sizeof(Vertex), offsetof(Vertex, texCoord));
+//    uint16_t verticesStartIndex = static_cast<uint16_t>(texturesPipeline.numVertices);
+
+//    generateTextMeshes(texturesPipeline.writeIndices(app.mappedIndicesMemory, requiredIndices),
+//                       texturesPipeline.writeVertices(app.mappedVerticesMemory, requiredVertices, sizeof(Vertex), offsetof(Vertex, pos)),
+//                       sizeof(Vertex),
+//                       verticesStartIndex,
+//                       app.fontBitmap,
+//                       startTexCoordPos,
+//                       texturesPipeline.vertexStride,
+//                       text, 500, 280);
+
+//    app.entitySystem.verticesComponent[app.entitySystem.nextEntity] = { vconfig::PIPELINE_MEMORY_SIZE / 2, 4, primativeShapesPipeline.vertexStride };
+//    app.entitySystem.numberVerticesComponents++;
+//    app.entitySystem.nextEntity++;
+
+//    assert(texturesPipeline.numIndices == requiredIndices);
+
+     // TODO: Audit and refactor
+//    app.entitySystem.verticesComponent[app.entitySystem.nextEntity] =
+//    {
+//        vconfig::PIPELINE_MEMORY_SIZE / 2,
+//        static_cast<uint16_t>(4),
+//        sizeof(BasicVertex)
+//    };
+
+//    app.entitySystem.numberVerticesComponents++;
+//    app.entitySystem.nextEntity++;
+}
+
+Point unnormalizePoint(NormalizedPoint point, uint16_t widthPixels, uint16_t heightPixels)
+{
+    double x = point.x.get();
+    x += 1.0;
+    x /= 2;
+    point.x.set(x);
+
+    double y = point.y.get();
+    y += 1.0;
+    y /= 2;
+    point.y.set(y);
+
+    return Point {
+        static_cast<uint16_t>(point.x.get() * static_cast<double>(widthPixels)),
+        static_cast<uint16_t>(point.y.get() * static_cast<double>(heightPixels))
+    };
+}
+
+uint32_t drawText(VulkanApplication& app, NormalizedPoint point, std::string& text)
+{
+    uint16_t requiredVertices = static_cast<uint16_t>(text.size()) * VERTICES_PER_SQUARE;
+    uint16_t requiredIndices = static_cast<uint16_t>(text.size()) * INDICES_PER_SQUARE;
+
+    assert(text.size() == 8);
+
+    VulkanApplicationPipeline& texturesPipeline = app.pipelines[PipelineType::Texture];
+
+    glm::vec2 * startTexCoordPos = texturesPipeline.getFreeVertices(app.mappedVerticesMemory, sizeof(Vertex), offsetof(Vertex, texCoord));
+    uint16_t verticesStartIndex = static_cast<uint16_t>(texturesPipeline.numVertices);
+
+    Point pointPixels = unnormalizePoint(point, 800, 600);
+
+    generateTextMeshes(texturesPipeline.writeIndices(app.mappedIndicesMemory, requiredIndices),
+                       texturesPipeline.writeVertices(app.mappedVerticesMemory, requiredVertices, sizeof(Vertex), offsetof(Vertex, pos)),
+                       sizeof(Vertex),
+                       verticesStartIndex,
+                       app.fontBitmap,
+                       startTexCoordPos,
+                       texturesPipeline.vertexStride,
+                       text, pointPixels.x, pointPixels.y);
+
+    app.entitySystem.verticesComponent[app.entitySystem.nextEntity] = { 0, requiredVertices, texturesPipeline.vertexStride };
+    app.entitySystem.numberVerticesComponents++;
+    app.entitySystem.nextEntity++;
+
+    return app.entitySystem.nextEntity - 1;
+}
+
 void loadInitialMeshData(VulkanApplication& app, uint32_t delta)
 {
     int width = 0, height = 0;
@@ -606,71 +729,96 @@ void loadInitialMeshData(VulkanApplication& app, uint32_t delta)
 
     texturesPipeline.vertexStride = sizeof(Vertex);
 
+    NormalizedPoint point;
+    point.x.set( 0.0 );
+    point.y.set( 0.0 );
+
+    std::string buttonText = "click me";
+
+    button(app, {0.0, 1.0, 0.0}, buttonText, point);
+
     std::string otherText = "How are you doing today? I hope you are doing well!";
 
     uint16_t requiredVertices = static_cast<uint16_t>(otherText.size()) * VERTICES_PER_SQUARE;
     uint16_t requiredIndices = static_cast<uint16_t>(otherText.size()) * INDICES_PER_SQUARE;
 
-    texturesPipeline.numVertices = requiredVertices;
+    glm::vec2 * startTexCoordPos = texturesPipeline.getFreeVertices(app.mappedVerticesMemory, sizeof(Vertex), offsetof(Vertex, texCoord));
 
-    Vertex * vertexPointer = reinterpret_cast<Vertex*>(app.mappedVerticesMemory + texturesPipeline.usageMap[static_cast<uint16_t>(MemoryUsageType::VERTEX_BUFFER)].offset);
-    uint16_t * indicesPointer = reinterpret_cast<uint16_t*>(app.mappedIndicesMemory + texturesPipeline.usageMap[static_cast<uint16_t>(MemoryUsageType::INDICES_BUFFER)].offset);
+    uint16_t verticesStartIndex = static_cast<uint16_t>(texturesPipeline.numVertices);
 
-    // TODO: generateTextMeshes needs to be split up so that I can update just the vertex data
-    generateTextMeshes(indicesPointer, &vertexPointer->pos, sizeof(Vertex), 0, app.fontBitmap, &vertexPointer->texCoord, texturesPipeline.vertexStride, otherText, 150, 25);
+    generateTextMeshes(texturesPipeline.writeIndices(app.mappedIndicesMemory, requiredIndices),
+                       texturesPipeline.writeVertices(app.mappedVerticesMemory, requiredVertices, sizeof(Vertex), offsetof(Vertex, pos)),
+                       sizeof(Vertex),
+                       verticesStartIndex,
+                       app.fontBitmap,
+                       startTexCoordPos,
+                       texturesPipeline.vertexStride,
+                       otherText, 150, 25);
 
     app.entitySystem.verticesComponent[app.entitySystem.nextEntity] = { 0, requiredVertices, texturesPipeline.vertexStride };
     app.entitySystem.numberVerticesComponents++;
     app.entitySystem.nextEntity++;
 
-    texturesPipeline.uiComponentsMap[0] = {
-        UIType::TEXT,
-        GraphicsUpdateDependency::STATIC,
-        0,
-        0,
-        requiredVertices,
-        requiredIndices
-    };
+//    assert(texturesPipeline.numVertices == requiredVertices);
 
-    texturesPipeline.numIndices = requiredIndices;
+//    texturesPipeline.uiComponentsMap[0] = {
+//        UIType::TEXT,
+//        GraphicsUpdateDependency::STATIC,
+//        0,
+//        0,
+//        requiredVertices,
+//        requiredIndices
+//    };
+
+//    assert(texturesPipeline.numIndices == requiredIndices);
 
     std::string moreText = "New text would be pretty nice actually..";
 
-    generateTextMeshes( indicesPointer + requiredIndices,
-                        &(vertexPointer + requiredVertices)->pos,
+    uint16_t moreRequiredIndices = static_cast<uint16_t>(moreText.size() * INDICES_PER_SQUARE);
+    uint16_t moreRequiredVertices = static_cast<uint16_t>(moreText.size() * VERTICES_PER_SQUARE);
+
+    glm::vec2 * startTexCoordPos2 = texturesPipeline.getFreeVertices(app.mappedVerticesMemory, sizeof(Vertex), offsetof(Vertex, texCoord));
+
+//    assert(texturesPipeline.numIndices == requiredIndices);
+
+//    assert(app.mappedIndicesMemory + texturesPipeline.usageMap[static_cast<uint16_t>(MemoryUsageType::INDICES_BUFFER)].offset + (requiredIndices * 2) ==
+//            reinterpret_cast<uint8_t *>( texturesPipeline.getFreeIndices(app.mappedIndicesMemory)) );
+
+    verticesStartIndex = static_cast<uint16_t>(texturesPipeline.numVertices);
+
+    generateTextMeshes( texturesPipeline.writeIndices(app.mappedIndicesMemory, moreRequiredIndices),
+                        texturesPipeline.writeVertices(app.mappedVerticesMemory, moreRequiredVertices, sizeof(Vertex), offsetof(Vertex, pos)),
                         sizeof(Vertex),
-                        requiredVertices,
+                        verticesStartIndex,
                         app.fontBitmap,
-                        &(vertexPointer + requiredVertices)->texCoord,
+                        startTexCoordPos2,
                         texturesPipeline.vertexStride,
                         moreText, 150, 250);
 
-    texturesPipeline.numVertices += moreText.size() * VERTICES_PER_SQUARE;
-    texturesPipeline.numIndices += moreText.size() * INDICES_PER_SQUARE;
+//    assert(texturesPipeline.numIndices == (moreText.size() * INDICES_PER_SQUARE) + (static_cast<uint16_t>(otherText.size()) * INDICES_PER_SQUARE));
+
+//    assert(app.entitySystem.verticesComponent[app.entitySystem.nextEntity - 1].spanElements == requiredVertices);
 
     app.entitySystem.verticesComponent[app.entitySystem.nextEntity] =
     {
         app.entitySystem.verticesComponent[app.entitySystem.nextEntity - 1].spanElements,
-        static_cast<uint16_t>(moreText.size() * VERTICES_PER_SQUARE),
+        moreRequiredVertices,
         texturesPipeline.vertexStride
     };
 
     app.entitySystem.numberVerticesComponents++;
     app.entitySystem.nextEntity++;
 
-    texturesPipeline.uiComponentsMap[1] = {
-        UIType::TEXT,
-        GraphicsUpdateDependency::STATIC,
-        requiredVertices,
-        requiredIndices,
-        static_cast<uint16_t>(moreText.size() * VERTICES_PER_SQUARE),
-        static_cast<uint16_t>(moreText.size() * INDICES_PER_SQUARE)
-    };
+//    texturesPipeline.uiComponentsMap[1] = {
+//        UIType::TEXT,
+//        GraphicsUpdateDependency::STATIC,
+//        requiredVertices,
+//        requiredIndices,
+//        static_cast<uint16_t>(moreText.size() * VERTICES_PER_SQUARE),
+//        static_cast<uint16_t>(moreText.size() * INDICES_PER_SQUARE)
+//    };
 
     // Second pipeline
-
-    Vertex * basicVertexPointer = reinterpret_cast<Vertex*>(app.mappedVerticesMemory + primativeShapesPipeline.usageMap[static_cast<uint16_t>(MemoryUsageType::VERTEX_BUFFER)].offset);
-    uint16_t * primativeShapesIndicesPointer = reinterpret_cast<uint16_t*>(app.mappedIndicesMemory + primativeShapesPipeline.usageMap[static_cast<uint16_t>(MemoryUsageType::INDICES_BUFFER)].offset);
 
     std::vector<BasicVertex> simpleShapesVertices = {
         {{-0.5f, -1.0f}, {1.0f, 0.0f, 0.0f}},
@@ -679,22 +827,58 @@ void loadInitialMeshData(VulkanApplication& app, uint32_t delta)
         {{-1.0f, -1.0f}, {1.0f, 0.0f, 0.0f}}
     };
 
-    primativeShapesPipeline.uiComponentsMap[0] = {
-        UIType::SHAPE,
-        GraphicsUpdateDependency::ALL,
-        0,
-        0,
-        4,
-        6
-    };
+//    primativeShapesPipeline.uiComponentsMap[0] = {
+//        UIType::SHAPE,
+//        GraphicsUpdateDependency::ALL,
+//        0,
+//        0,
+//        4,
+//        6
+//    };
 
-    memcpy(basicVertexPointer, simpleShapesVertices.data(), simpleShapesVertices.size() * sizeof(BasicVertex));
+//    app.entitySystem.verticesComponent[app.entitySystem.nextEntity] =
+//    {
+//        primativeShapesPipeline.numVertices,
+//        static_cast<uint16_t>(simpleShapesVertices.size()),
+//        sizeof(BasicVertex)
+//    };
+
+//    app.entitySystem.numberVerticesComponents++;
+//    app.entitySystem.nextEntity++;
+
+//    assert(primativeShapesPipeline.numVertices == 0);
+
+    static_assert(offsetof(BasicVertex, pos) == 0);
+
+//    assert(primativeShapesPipeline.getFreeVertices(app.mappedVerticesMemory, sizeof(BasicVertex), offsetof(BasicVertex, pos)) ==
+//           reinterpret_cast<glm::vec2*>( app.mappedVerticesMemory + primativeShapesPipeline.usageMap[static_cast<uint16_t>(MemoryUsageType::VERTEX_BUFFER)].offset ));
+
+    memcpy(primativeShapesPipeline.writeVertices(app.mappedVerticesMemory, VERTICES_PER_SQUARE * 1, sizeof(BasicVertex), offsetof(BasicVertex, pos)),
+           simpleShapesVertices.data(), simpleShapesVertices.size() * sizeof(BasicVertex));
+
+//    assert(primativeShapesPipeline.getFreeVertices(app.mappedVerticesMemory, sizeof(BasicVertex), offsetof(BasicVertex, pos)) ==
+//           reinterpret_cast<glm::vec2*>( app.mappedVerticesMemory + primativeShapesPipeline.usageMap[static_cast<uint16_t>(MemoryUsageType::VERTEX_BUFFER)].offset + (4 * sizeof(BasicVertex)) ));
+
+//    assert(primativeShapesPipeline.numVertices == 4);
+
+//    uint16_t nextVertexIndex = primativeShapesPipeline.numVertices;
+
+//    std::vector<uint16_t> drawIndices = {
+//        0, 1, 2, 2, 3, 0
+//    };
 
     std::vector<uint16_t> drawIndices = {
-        0, 1, 2, 2, 3, 0
+        4, 5, 6, 6, 7, 4
     };
 
-    memcpy(primativeShapesIndicesPointer, drawIndices.data(), drawIndices.size() * sizeof(uint16_t));
+//    assert(primativeShapesPipeline.numIndices == 0);
+
+//    assert(primativeShapesPipeline.getFreeIndices(app.mappedIndicesMemory) ==
+//           reinterpret_cast<uint16_t*>(app.mappedIndicesMemory + primativeShapesPipeline.usageMap[static_cast<uint16_t>(MemoryUsageType::INDICES_BUFFER)].offset));
+
+    memcpy(primativeShapesPipeline.writeIndices(app.mappedIndicesMemory, INDICES_PER_SQUARE * 1), drawIndices.data(), drawIndices.size() * sizeof(uint16_t));
+
+//    assert(primativeShapesPipeline.numIndices == 6);
 
     app.entitySystem.verticesComponent[app.entitySystem.nextEntity] =
     {
@@ -702,8 +886,6 @@ void loadInitialMeshData(VulkanApplication& app, uint32_t delta)
         static_cast<uint16_t>(simpleShapesVertices.size()),
         sizeof(BasicVertex)
     };
-
-    assert(simpleShapesVertices.size() == 4);
 
     app.entitySystem.numberVerticesComponents++;
     app.entitySystem.nextEntity++;
@@ -752,9 +934,20 @@ void loadInitialMeshData(VulkanApplication& app, uint32_t delta)
         0
     };
 
-    primativeShapesPipeline.numVertices = static_cast<uint32_t>(simpleShapesVertices.size());
-    primativeShapesPipeline.numIndices = static_cast<uint32_t>(drawIndices.size());
+//    assert(primativeShapesPipeline.numVertices == static_cast<uint32_t>(simpleShapesVertices.size()));
+//    assert(primativeShapesPipeline.numIndices == static_cast<uint32_t>(drawIndices.size()));
+
+//    primativeShapesPipeline.numVertices = static_cast<uint32_t>(simpleShapesVertices.size());
+//    primativeShapesPipeline.numIndices = static_cast<uint32_t>(drawIndices.size());
     primativeShapesPipeline.vertexStride = sizeof(BasicVertex);
+
+//    NormalizedPoint point2;
+//    point.x.set( 0.3 );
+//    point.y.set( 0.3 );
+
+////    std::string buttonText = "click me";
+
+//    button(app, {0.0, 1.0, 0.0}, buttonText, point2);
 
     VkClearValue clearColor = { /* .color = */  {  /* .float32 = */  { 1.0f, 1.0f, 1.0f, 1.0f } } };
 
@@ -798,6 +991,8 @@ void loadInitialMeshData(VulkanApplication& app, uint32_t delta)
                 if(pipeline.pipelineLayout != nullptr && pipeline.descriptorSets.size() != 0) {
                     vkCmdBindDescriptorSets(app.commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipelineLayout, 0, 1, &pipeline.descriptorSets[i], 0, nullptr);
                 }
+
+                assert(pipeline.numIndices >= 6);
 
                 vkCmdDrawIndexed(app.commandBuffers[i], pipeline.numIndices, 1, 0, 0, 0);
 
@@ -847,6 +1042,11 @@ static void handleOperation8(VulkanApplication& app, Operation8& operation)
 //            printf("move op\n");
             RelativeMoveOperation& relativeMove = operation.opData.relativeMove;
             RelativeDataLocation& verticesTarget = app.entitySystem.verticesComponent[relativeMove.targetEntity];
+
+//            assert(verticesTarget.spanElements > 10);
+//            assert(verticesTarget.strideBytes == sizeof(Vertex));
+//            assert(verticesTarget.offsetBytes == 0);
+
             updateAddVertexPositions(   reinterpret_cast<glm::vec2*>(app.entitySystem.verticesComponentBasePtr + verticesTarget.offsetBytes),
                                         verticesTarget.spanElements,
                                         verticesTarget.strideBytes,
